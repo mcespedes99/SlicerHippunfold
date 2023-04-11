@@ -4,7 +4,6 @@ import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
 from slicer.util import VTKObservationMixin
 import numpy as np
-import pandas as pd
 import re
 
 # Packages that might need to be installed
@@ -27,6 +26,11 @@ except:
     os.system('PythonSlicer -m pip install pynrrd')
     import nrrd
 
+try:
+    import pandas as pd
+except:
+    os.system('PythonSlicer -m pip install pandas')
+    import pandas as pd
 #
 # HippSlicer. Module to connect 3D Slicer with vCastSender application.
 #
