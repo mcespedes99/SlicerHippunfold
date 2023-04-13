@@ -5,6 +5,7 @@ from slicer.ScriptedLoadableModule import *
 from slicer.util import VTKObservationMixin
 import numpy as np
 import re
+from qt import QStandardItem
 
 # Packages that might need to be installed
 try:
@@ -102,6 +103,9 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.applyButton.toolTip = "Please select a path to Hippunfold results"
         self.ui.applyButton.enabled = False
         self.ui.subj.addItems(['Select subject'])
+        self.ui.tableWidget.setColumnWidth(0, 160)
+        self.ui.tableWidget.setColumnWidth(1, 170)
+        self.ui.tableWidget.setColumnWidth(2, 170)
             
 
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
@@ -125,6 +129,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Buttons
         self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
+        self.ui.addButton.connect('clicked(bool)', self.onAddButton)
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
@@ -258,13 +263,33 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self._parameterNode.EndModify(wasModified)
 
+    def onAddButton(self):
+        """
+        Configures the behavior of 'add' button by connecting it to the logic function.
+        """
+        # Access the QStandardItemModel associated with the QTableView
+        model = self.ui.tableWidget.model()
+        # Add a new row to the list when the "+" button is clicked
+        # row = [QStandardItem() for _ in range(3)]  # Create an empty row with three columns
+        model.insertRows(0, 1)  # Append the row to the model
+        
     def onApplyButton(self):
         """
         Configures the behavior of 'Apply' button by connecting it to the logic function.
         """
+        # Get all values inputted on the table
+        nrows = self.ui.tableWidget.rowCount
+        ncols = 3
+        files_wc = []
+        for row in range(nrows):
+            ext = self.ui.tableWidget.item(row, 0).text()
+            keyword = self.ui.tableWidget.item(row, 1).text()
+            directory = self.ui.tableWidget.item(row, 2).text()
+            files_wc.append((ext,keyword,directory))
+
         HippSlicerLogic().convertToSlicer(str(self.ui.HippUnfoldDirSelector.directory), 
                                            str(self.ui.OutputDirSelector.directory), 
-                                           self.atlas_labels)
+                                           self.atlas_labels, files_wc)
     
 
 #########################################################################################
@@ -288,12 +313,14 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         if not parameterNode.GetParameter("LUT"):
             parameterNode.SetParameter("LUT", "Select LUT file")
 
-    def convertToSlicer(self, HippUnfoldDirPath, OutputPath, atlas_labels_file):
+    def convertToSlicer(self, HippUnfoldDirPath, OutputPath, atlas_labels_file, files_wc):
         """
         Updates this file by changing the default _dir_chosen attribute from
         the HippSlicer and HippSlicerWidget classes so that the next time
         3D Slicer is launched, the directory to vCastSender.exe is saved.
         """
+        for item in files_wc:
+            print(item)
         # Read atlas label
         atlas_labels = pd.read_table(atlas_labels_file)
         atlas_labels['lut']=atlas_labels[['r','g','b']].to_numpy().tolist()
@@ -310,6 +337,10 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         surf_files = list(filter(r.match, surf_files))
 
         # Compute results
+        
+        
+
+    def convert_dseg(self, dseg_files, OutputPath, atlas_labels):
         for dseg in dseg_files:
             # Find base file name to create output
             filename_with_extension = os.path.basename(dseg)
@@ -323,6 +354,8 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
             self.write_nrrd(data_obj, seg_out_fname, atlas_labels)
             seg = slicer.util.loadSegmentation(seg_out_fname)
             seg.CreateClosedSurfaceRepresentation()
+    
+    def convert_surf(self):
         for surf in surf_files:
             # Find base file name to create output
             filename_with_extension = os.path.basename(surf)
@@ -336,7 +369,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
             faces = gii_data.get_arrays_from_intent('NIFTI_INTENT_TRIANGLE')[0].data
             self.write_ply(gii_out_fname,vertices,faces,'SPACE=RAS')
             slicer.util.loadModel(gii_out_fname)
-
+            
     # Functions to compute files
     def bounding_box(self, seg):
         x = np.any(np.any(seg, axis=0), axis=1)
