@@ -1,0 +1,12 @@
+# config.yml file
+pybids_inputs:
+  surf:
+    filters:
+      extension: '.surf.gii'
+      suffix: ['inner','midthickness','outer']
+      custom_regex: "^.+_space-T1w_den-0p5mm_label-hipp_.+.surf.gii$"
+  dseg:
+    filters:
+      extension: 'nii.gz'
+      suffix: 'dseg'
+      datatype: 'anat'

@@ -13,8 +13,7 @@ try:
 except:
     os.system('PythonSlicer -m pip install pybids')
     from bids import BIDSLayout
-
-
+        
 try:
     import nibabel as nb
 except:
@@ -32,6 +31,12 @@ try:
 except:
     os.system('PythonSlicer -m pip install pandas')
     import pandas as pd
+
+try:
+    import yaml
+except:
+    os.system('PythonSlicer -m pip install pyyaml')
+    import yaml
 #
 # HippSlicer. Module to connect 3D Slicer with vCastSender application.
 #
@@ -78,6 +83,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._bool_subj = False
         self._dir_selected = False
         self.atlas_labels = self.resourcePath('Data/desc-subfields_atlas-bigbrain_dseg.tsv')
+        self.config = self.resourcePath('Config/config.yml')
 
     def setup(self):
         """
@@ -103,9 +109,6 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.applyButton.toolTip = "Please select a path to Hippunfold results"
         self.ui.applyButton.enabled = False
         self.ui.subj.addItems(['Select subject'])
-        self.ui.tableWidget.setColumnWidth(0, 160)
-        self.ui.tableWidget.setColumnWidth(1, 170)
-        self.ui.tableWidget.setColumnWidth(2, 170)
             
 
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
@@ -125,11 +128,11 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.HippUnfoldDirSelector.connect("directoryChanged(QString)", self.onDirectoryChange)
         self.ui.OutputDirSelector.connect("directoryChanged(QString)", self.onDirectoryChange)
         self.ui.subj.connect('currentIndexChanged(int)', self.onSubjChange)
+        self.ui.configFileSelector.connect("currentPathChanged(QString)", self.onConfigChange)
         # print('ca')
 
         # Buttons
         self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
-        self.ui.addButton.connect('clicked(bool)', self.onAddButton)
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
@@ -213,6 +216,55 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.applyButton.enabled = False
             self._bool_subj = False
 
+    def onConfigChange(self):
+        """
+        Function to enable/disable 'Apply' button depending on the selected file
+        """
+        if os.path.isfile(str(self.ui.configFileSelector.currentPath)): # Add case where the input is not a bids dir
+            self.config = str(self.ui.configFileSelector.currentPath)
+            # Read yaml file
+            with open(self.config) as file:
+                inputs_dict = yaml.load(file, Loader=yaml.FullLoader)
+            data_path = os.path.join(str(self.ui.HippUnfoldDirSelector.directory), 'hippunfold')
+            layout = BIDSLayout(data_path, validate=False)
+            files = []
+            for type_file in inputs_dict['pybids_inputs']:
+                input_filters = {
+                    'subject':'P022'
+                }
+                config_filters = inputs_dict['pybids_inputs'][type_file]['filters']
+                #Remove regex wc
+                regex_filter = None
+                if 'custom_regex' in config_filters:
+                    regex_filter = config_filters['custom_regex']
+                    del config_filters['custom_regex']
+                # Update filter
+                input_filters.update(config_filters)
+                # Look for files based on BIDS 
+                tmp_files = layout.get(**input_filters, return_type='filename')
+                # Filter based on regex if requested
+                if regex_filter != None:
+                    r = re.compile(regex_filter)
+                    tmp_files = list(filter(r.match, tmp_files))
+                # Add to list of files
+                files += tmp_files
+            for file in files:
+                print(file)
+        # Button should be activated only after files have been choosen
+        # # If the selected file is a valid one, the button is enabled.
+        # if (len(self._tmp_dir)>0 and os.path.isfile(self._tmp_dir)) and self._tmp_dir.endswith('vCastSender.exe') and (self._tmp_dir != self._dir_chosen):
+        #     self.ui.applyButton.toolTip = "Set directory"
+        #     self.ui.applyButton.enabled = True
+        # # A path has already been set. 
+        # elif len(self._tmp_dir)>0 and (self._tmp_dir == self._dir_chosen):
+        #     self.ui.applyButton.toolTip = "Please select a new path to vCastSender.exe"
+        #     self.ui.applyButton.enabled = False
+        # # Else, it is disabled.
+        # else:
+        #     self.ui.applyButton.toolTip = "Please select a valid directory for vCastSender.exe"
+        #     self.ui.applyButton.enabled = False
+    
+
     def onDirectoryChange(self):
         """
         Function to enable/disable 'Apply' button depending on the selected file
@@ -262,34 +314,14 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._parameterNode.SetNodeReferenceID("OutputDir", self.ui.OutputDirSelector.currentNodeID)
 
         self._parameterNode.EndModify(wasModified)
-
-    def onAddButton(self):
-        """
-        Configures the behavior of 'add' button by connecting it to the logic function.
-        """
-        # Access the QStandardItemModel associated with the QTableView
-        model = self.ui.tableWidget.model()
-        # Add a new row to the list when the "+" button is clicked
-        # row = [QStandardItem() for _ in range(3)]  # Create an empty row with three columns
-        model.insertRows(0, 1)  # Append the row to the model
         
     def onApplyButton(self):
         """
         Configures the behavior of 'Apply' button by connecting it to the logic function.
         """
-        # Get all values inputted on the table
-        nrows = self.ui.tableWidget.rowCount
-        ncols = 3
-        files_wc = []
-        for row in range(nrows):
-            ext = self.ui.tableWidget.item(row, 0).text()
-            keyword = self.ui.tableWidget.item(row, 1).text()
-            directory = self.ui.tableWidget.item(row, 2).text()
-            files_wc.append((ext,keyword,directory))
-
         HippSlicerLogic().convertToSlicer(str(self.ui.HippUnfoldDirSelector.directory), 
                                            str(self.ui.OutputDirSelector.directory), 
-                                           self.atlas_labels, files_wc)
+                                           self.atlas_labels, self.config)
     
 
 #########################################################################################
@@ -313,20 +345,22 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         if not parameterNode.GetParameter("LUT"):
             parameterNode.SetParameter("LUT", "Select LUT file")
 
-    def convertToSlicer(self, HippUnfoldDirPath, OutputPath, atlas_labels_file, files_wc):
+    def convertToSlicer(self, HippUnfoldDirPath, OutputPath, atlas_labels_file, config_file):
         """
         Updates this file by changing the default _dir_chosen attribute from
         the HippSlicer and HippSlicerWidget classes so that the next time
         3D Slicer is launched, the directory to vCastSender.exe is saved.
         """
-        for item in files_wc:
-            print(item)
         # Read atlas label
         atlas_labels = pd.read_table(atlas_labels_file)
         atlas_labels['lut']=atlas_labels[['r','g','b']].to_numpy().tolist()
         # pybids
         data_path = os.path.join(HippUnfoldDirPath, 'hippunfold')
         layout = BIDSLayout(data_path, validate=False)
+
+        # # Test yml
+        # with open(config_file) as file:
+        #     inputs_dict = yaml.load(file, Loader=yaml.FullLoader)
         # Retrieve filenames of dseg files
         dseg_files = layout.get(subject='P022', extension='nii.gz', suffix='dseg', datatype='anat', return_type='filename')
         # Retrieve filenames of surf files
@@ -336,7 +370,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         r = re.compile("^.+_space-T1w_den-0p5mm_label-hipp_.+.surf.gii$")
         surf_files = list(filter(r.match, surf_files))
 
-        # Compute results
+        
         
         
 

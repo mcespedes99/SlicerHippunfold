@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>HippSlicer</class>
+ <class>BrainZoneClassifier</class>
  <widget class="qMRMLWidget" name="HippSlicer">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>279</width>
+    <height>286</height>
+   </rect>
+  </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="ctkCollapsibleButton" name="inputsCollapsibleButton">
@@ -18,22 +26,51 @@
       </item>
       <item row="0" column="1">
        <widget class="ctkDirectoryButton" name="HippUnfoldDirSelector">
-        <property name="HippUnfoldDir" stdset="0">
+        <property name="HippUnfoldDir">
          <string>Input path to Hippunfold results</string>
         </property>
-        <property name="showChildNodeTypes" stdset="0">
+        <property name="showChildNodeTypes">
          <bool>false</bool>
         </property>
-        <property name="addEnabled" stdset="0">
+        <property name="addEnabled">
          <bool>false</bool>
         </property>
-        <property name="removeEnabled" stdset="0">
+        <property name="removeEnabled">
          <bool>false</bool>
         </property>
-        <property name="noneEnabled" stdset="0">
+        <property name="noneEnabled">
          <bool>false</bool>
         </property>
-        <property name="selectNodeUponCreation" stdset="0">
+        <property name="selectNodeUponCreation">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Path to output directory:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="ctkDirectoryButton" name="OutputDirSelector">
+        <property name="OutputDir">
+         <string>Path to output directory</string>
+        </property>
+        <property name="showChildNodeTypes">
+         <bool>false</bool>
+        </property>
+        <property name="addEnabled">
+         <bool>false</bool>
+        </property>
+        <property name="removeEnabled">
+         <bool>false</bool>
+        </property>
+        <property name="noneEnabled">
+         <bool>false</bool>
+        </property>
+        <property name="selectNodeUponCreation">
          <bool>true</bool>
         </property>
        </widget>
@@ -41,116 +78,52 @@
       <item row="2" column="0">
        <widget class="QLabel" name="label">
         <property name="text">
-         <string>Path to output directory:</string>
+         <string>Subject:</string>
         </property>
        </widget>
       </item>
       <item row="2" column="1">
-       <widget class="ctkDirectoryButton" name="OutputDirSelector">
-        <property name="OutputDir" stdset="0">
-         <string>Path to output directory</string>
-        </property>
-        <property name="showChildNodeTypes" stdset="0">
-         <bool>false</bool>
-        </property>
-        <property name="addEnabled" stdset="0">
-         <bool>false</bool>
-        </property>
-        <property name="removeEnabled" stdset="0">
-         <bool>false</bool>
-        </property>
-        <property name="noneEnabled" stdset="0">
-         <bool>false</bool>
-        </property>
-        <property name="selectNodeUponCreation" stdset="0">
-         <bool>true</bool>
+       <widget class="QComboBox" name="subj">
+        <property name="geometry">
+            <rect>
+            <x>190</x>
+            <y>510</y>
+            <width>69</width>
+            <height>22</height>
+            </rect>
         </property>
        </widget>
       </item>
       <item row="3" column="0">
        <widget class="QLabel" name="label">
         <property name="text">
-         <string>Subject:</string>
+         <string>Config:</string>
         </property>
        </widget>
       </item>
       <item row="3" column="1">
-       <widget class="QComboBox" name="subj"/>
+       <widget class="ctkPathLineEdit" name="configFileSelector">
+        <property name="vCastSender">
+         <string>Input vCastSender path</string>
+        </property>
+        <property name="showChildNodeTypes">
+         <bool>false</bool>
+        </property>
+        <property name="addEnabled">
+         <bool>false</bool>
+        </property>
+        <property name="removeEnabled">
+         <bool>false</bool>
+        </property>
+        <property name="noneEnabled">
+         <bool>false</bool>
+        </property>
+        <property name="selectNodeUponCreation">
+         <bool>true</bool>
+        </property>
+       </widget>
       </item>
      </layout>
-    </widget>
-   </item>
-   <item>
-    <widget class="QGroupBox" name="groupBox">
-     <property name="minimumSize">
-      <size>
-       <width>0</width>
-       <height>138</height>
-      </size>
-     </property>
-     <property name="maximumSize">
-      <size>
-       <width>16777215</width>
-       <height>16777215</height>
-      </size>
-     </property>
-     <widget class="QPushButton" name="addButton">
-      <property name="geometry">
-       <rect>
-        <x>520</x>
-        <y>10</y>
-        <width>71</width>
-        <height>23</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>(+)</string>
-      </property>
-     </widget>
-     <widget class="QTableWidget" name="tableWidget">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>10</y>
-        <width>500</width>
-        <height>101</height>
-       </rect>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>640</width>
-        <height>16777215</height>
-       </size>
-      </property>
-      <column>
-       <property name="text">
-        <string>Extension</string>
-       </property>
-      </column>
-      <column>
-       <property name="text">
-        <string>Keyword</string>
-       </property>
-      </column>
-      <column>
-       <property name="text">
-        <string>Parent directory</string>
-       </property>
-      </column>
-     </widget>
-     <widget class="QPushButton" name="removeButton">
-      <property name="geometry">
-       <rect>
-        <x>520</x>
-        <y>40</y>
-        <width>71</width>
-        <height>23</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>(-)</string>
-      </property>
-     </widget>
     </widget>
    </item>
    <item>
@@ -174,32 +147,12 @@
      <property name="sizeHint" stdset="0">
       <size>
        <width>20</width>
-       <height>0</height>
+       <height>40</height>
       </size>
      </property>
     </spacer>
    </item>
   </layout>
  </widget>
- <customwidgets>
-  <customwidget>
-   <class>ctkCollapsibleButton</class>
-   <extends>QWidget</extends>
-   <header>ctkCollapsibleButton.h</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>ctkDirectoryButton</class>
-   <extends>QWidget</extends>
-   <header>ctkDirectoryButton.h</header>
-  </customwidget>
-  <customwidget>
-   <class>qMRMLWidget</class>
-   <extends>QWidget</extends>
-   <header>qMRMLWidget.h</header>
-   <container>1</container>
-  </customwidget>
- </customwidgets>
  <resources/>
- <connections/>
 </ui>
