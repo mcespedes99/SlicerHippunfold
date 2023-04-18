@@ -108,7 +108,13 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # UI boot configuration of 'Apply' button and the input box. 
         self.ui.applyButton.toolTip = "Please select a path to Hippunfold results"
         self.ui.applyButton.enabled = False
-        self.ui.subj.addItems(['Select subject'])
+
+        self.ui.applyButton.toolTip = "Please select a path to Hippunfold results"
+        self.ui.applyButton.enabled = False
+
+        self.ui.selectButton.toolTip = "Please select a subject"
+        self.ui.selectButton.enabled = False
+        # self.ui.subj.addItems(['Select subject'])
             
 
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
@@ -127,12 +133,13 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # (in the selected parameter node).
         self.ui.HippUnfoldDirSelector.connect("directoryChanged(QString)", self.onDirectoryChange)
         self.ui.OutputDirSelector.connect("directoryChanged(QString)", self.onDirectoryChange)
-        self.ui.subj.connect('currentIndexChanged(int)', self.onSubjChange)
+        self.ui.subj.connect('checkedIndexesChanged()', self.onSubjChange)
         self.ui.configFileSelector.connect("currentPathChanged(QString)", self.onConfigChange)
         # print('ca')
 
         # Buttons
         self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
+        self.ui.selectButton.connect('clicked(bool)', self.onSelectButton)
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
@@ -206,15 +213,20 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if self._parameterNode is None or self._updatingGUIFromParameterNode:
             return
         # Set state of button
-        if self.ui.subj.currentIndex != 0:
+        self._bool_subj = False
+        list_indexes = self.ui.subj.checkedIndexes()
+        if len(list_indexes) > 0:
             self._bool_subj = True
             if self._dir_selected:
                 self.ui.applyButton.toolTip = "Run algorithm"
                 self.ui.applyButton.enabled = True
+                self.ui.selectButton.toolTip = "Select subjects"
+                self.ui.selectButton.enabled = True
         else: # The button must be disabled if the condition is not met
             self.ui.applyButton.toolTip = "Select the required inputs"
             self.ui.applyButton.enabled = False
-            self._bool_subj = False
+            self.ui.selectButton.toolTip = "Please select a subject"
+            self.ui.selectButton.enabled = False
 
     def onConfigChange(self):
         """
@@ -281,7 +293,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 layout = BIDSLayout(data_path, validate=False)
                 list_subj = layout.get(return_type='id', target='subject')
                 self.ui.subj.clear()
-                self.ui.subj.addItems(['Select subject']+list_subj)
+                self.ui.subj.addItems(list_subj)
             except ValueError:
                 self.ui.applyButton.toolTip = "Please select a valid directory"
                 self.ui.applyButton.enabled = False
@@ -314,7 +326,26 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._parameterNode.SetNodeReferenceID("OutputDir", self.ui.OutputDirSelector.currentNodeID)
 
         self._parameterNode.EndModify(wasModified)
-        
+    
+    def onSelectButton(self):
+        """
+        Configures the behavior of 'Apply' button by connecting it to the logic function.
+        """
+        # First clear content
+        for i in range(self.ui.filesLayout.count()):
+            self.ui.filesLayout.removeRow(0)
+        # List of indexes checked
+        list_indexes = self.ui.subj.checkedIndexes()
+        for index_checked in list_indexes:
+          index_int = index_checked.row()
+          item = self.ui.subj.itemText(index_int)
+          print(item)
+          # Create new check list
+          checklist = ctk.ctkCheckableComboBox()
+        #   print(dir(self.ui.filesLayout))
+          # Add row to form layout
+          self.ui.filesLayout.addRow(f"Files for {item}: ", checklist)
+
     def onApplyButton(self):
         """
         Configures the behavior of 'Apply' button by connecting it to the logic function.

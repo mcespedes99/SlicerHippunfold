@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>BrainZoneClassifier</class>
+ <class>HippSlicer</class>
  <widget class="qMRMLWidget" name="HippSlicer">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>279</width>
+    <width>588</width>
     <height>286</height>
    </rect>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout">
-   <item>
+  <layout class="QGridLayout" name="verticalLayout">
+   <item row="0" column="0">
     <widget class="ctkCollapsibleButton" name="inputsCollapsibleButton">
      <property name="text">
       <string>Inputs</string>
      </property>
-     <layout class="QFormLayout" name="formLayout_2">
+     <layout class="QFormLayout" name="formLayout">
       <item row="0" column="0">
        <widget class="QLabel" name="label">
         <property name="text">
@@ -26,22 +26,22 @@
       </item>
       <item row="0" column="1">
        <widget class="ctkDirectoryButton" name="HippUnfoldDirSelector">
-        <property name="HippUnfoldDir">
+        <property name="HippUnfoldDir" stdset="0">
          <string>Input path to Hippunfold results</string>
         </property>
-        <property name="showChildNodeTypes">
+        <property name="showChildNodeTypes" stdset="0">
          <bool>false</bool>
         </property>
-        <property name="addEnabled">
+        <property name="addEnabled" stdset="0">
          <bool>false</bool>
         </property>
-        <property name="removeEnabled">
+        <property name="removeEnabled" stdset="0">
          <bool>false</bool>
         </property>
-        <property name="noneEnabled">
+        <property name="noneEnabled" stdset="0">
          <bool>false</bool>
         </property>
-        <property name="selectNodeUponCreation">
+        <property name="selectNodeUponCreation" stdset="0">
          <bool>true</bool>
         </property>
        </widget>
@@ -55,42 +55,23 @@
       </item>
       <item row="1" column="1">
        <widget class="ctkDirectoryButton" name="OutputDirSelector">
-        <property name="OutputDir">
+        <property name="OutputDir" stdset="0">
          <string>Path to output directory</string>
         </property>
-        <property name="showChildNodeTypes">
+        <property name="showChildNodeTypes" stdset="0">
          <bool>false</bool>
         </property>
-        <property name="addEnabled">
+        <property name="addEnabled" stdset="0">
          <bool>false</bool>
         </property>
-        <property name="removeEnabled">
+        <property name="removeEnabled" stdset="0">
          <bool>false</bool>
         </property>
-        <property name="noneEnabled">
+        <property name="noneEnabled" stdset="0">
          <bool>false</bool>
         </property>
-        <property name="selectNodeUponCreation">
+        <property name="selectNodeUponCreation" stdset="0">
          <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="0">
-       <widget class="QLabel" name="label">
-        <property name="text">
-         <string>Subject:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="QComboBox" name="subj">
-        <property name="geometry">
-            <rect>
-            <x>190</x>
-            <y>510</y>
-            <width>69</width>
-            <height>22</height>
-            </rect>
         </property>
        </widget>
       </item>
@@ -103,22 +84,22 @@
       </item>
       <item row="3" column="1">
        <widget class="ctkPathLineEdit" name="configFileSelector">
-        <property name="vCastSender">
+        <property name="vCastSender" stdset="0">
          <string>Input vCastSender path</string>
         </property>
-        <property name="showChildNodeTypes">
+        <property name="showChildNodeTypes" stdset="0">
          <bool>false</bool>
         </property>
-        <property name="addEnabled">
+        <property name="addEnabled" stdset="0">
          <bool>false</bool>
         </property>
-        <property name="removeEnabled">
+        <property name="removeEnabled" stdset="0">
          <bool>false</bool>
         </property>
-        <property name="noneEnabled">
+        <property name="noneEnabled" stdset="0">
          <bool>false</bool>
         </property>
-        <property name="selectNodeUponCreation">
+        <property name="selectNodeUponCreation" stdset="0">
          <bool>true</bool>
         </property>
        </widget>
@@ -126,7 +107,61 @@
      </layout>
     </widget>
    </item>
-   <item>
+   <item row="1" column="0">
+    <widget class="ctkCollapsibleButton" name="inputsCollapsibleButton">
+     <property name="text">
+      <string>Subjects</string>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <property name="topMargin">
+       <number>5</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Subjects:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="ctkCheckableComboBox" name="subj"/>
+      </item>
+      <item>
+       <widget class="QPushButton" name="selectButton">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="toolTip">
+         <string>Run the algorithm.</string>
+        </property>
+        <property name="text">
+         <string>Select</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="ctkCollapsibleButton" name="inputsCollapsibleButton">
+     <property name="text">
+      <string>Files</string>
+     </property>
+     <layout class="QFormLayout" name="filesLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Files:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="ctkCheckableComboBox" name="files_box"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="3" column="0">
     <widget class="QPushButton" name="applyButton">
      <property name="enabled">
       <bool>false</bool>
@@ -139,7 +174,7 @@
      </property>
     </widget>
    </item>
-   <item>
+   <item row="4" column="0">
     <spacer name="verticalSpacer">
      <property name="orientation">
       <enum>Qt::Vertical</enum>
@@ -154,5 +189,35 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ctkCheckableComboBox</class>
+   <extends>QComboBox</extends>
+   <header>ctkCheckableComboBox.h</header>
+  </customwidget>
+  <customwidget>
+   <class>ctkCollapsibleButton</class>
+   <extends>QWidget</extends>
+   <header>ctkCollapsibleButton.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ctkDirectoryButton</class>
+   <extends>QWidget</extends>
+   <header>ctkDirectoryButton.h</header>
+  </customwidget>
+  <customwidget>
+   <class>ctkPathLineEdit</class>
+   <extends>QWidget</extends>
+   <header>ctkPathLineEdit.h</header>
+  </customwidget>
+  <customwidget>
+   <class>qMRMLWidget</class>
+   <extends>QWidget</extends>
+   <header>qMRMLWidget.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
  <resources/>
+ <connections/>
 </ui>
