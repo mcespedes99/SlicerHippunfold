@@ -6,6 +6,9 @@ from slicer.util import VTKObservationMixin
 import numpy as np
 import re
 from qt import QStandardItem
+from pathlib import Path
+import copy
+
 
 # Packages that might need to be installed
 try:
@@ -84,6 +87,9 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._dir_selected = False
         self.atlas_labels = self.resourcePath('Data/desc-subfields_atlas-bigbrain_dseg.tsv')
         self.config = self.resourcePath('Config/config.yml')
+        # Condition to set apply botton to true based on files selection
+        self.files_selected = False
+        self.checkboxes = [[],[]] # convert and visible
 
     def setup(self):
         """
@@ -108,12 +114,18 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # UI boot configuration of 'Apply' button and the input box. 
         self.ui.applyButton.toolTip = "Please select a path to Hippunfold results"
         self.ui.applyButton.enabled = False
+        # TableWidget
+        header = self.ui.tableFiles.horizontalHeader()
+        header.setDefaultSectionSize(75)
+        header.setSectionResizeMode(0, qt.QHeaderView.Stretch)
+        header.setSectionResizeMode(1, qt.QHeaderView.Fixed)
+        header.setSectionResizeMode(2, qt.QHeaderView.Fixed)
 
-        self.ui.applyButton.toolTip = "Please select a path to Hippunfold results"
-        self.ui.applyButton.enabled = False
+        # Subj dropdown
+        self.ui.subj.addItems(['Select subject'])
 
-        self.ui.selectButton.toolTip = "Please select a subject"
-        self.ui.selectButton.enabled = False
+        self.ui.configFileSelector.setCurrentPath(self.config)
+
         # self.ui.subj.addItems(['Select subject'])
             
 
@@ -133,13 +145,12 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # (in the selected parameter node).
         self.ui.HippUnfoldDirSelector.connect("directoryChanged(QString)", self.onDirectoryChange)
         self.ui.OutputDirSelector.connect("directoryChanged(QString)", self.onDirectoryChange)
-        self.ui.subj.connect('checkedIndexesChanged()', self.onSubjChange)
+        self.ui.subj.connect('currentIndexChanged(int)', self.onSubjChange)
         self.ui.configFileSelector.connect("currentPathChanged(QString)", self.onConfigChange)
         # print('ca')
 
         # Buttons
         self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
-        self.ui.selectButton.connect('clicked(bool)', self.onSelectButton)
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
@@ -213,68 +224,80 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if self._parameterNode is None or self._updatingGUIFromParameterNode:
             return
         # Set state of button
-        self._bool_subj = False
-        list_indexes = self.ui.subj.checkedIndexes()
-        if len(list_indexes) > 0:
+        if self.ui.subj.currentIndex != 0:
             self._bool_subj = True
             if self._dir_selected:
+                # Clear the table
+                while (self.ui.tableFiles.rowCount > 0):
+                    self.ui.tableFiles.removeRow(0)
+                # Load the files
+                for file in self.files[self.ui.subj.currentText]:
+                    rowPosition = self.ui.tableFiles.rowCount
+                    self.ui.tableFiles.insertRow(rowPosition)
+                    # Use file path without selected parent folder
+                    filename = re.sub(str(self.ui.HippUnfoldDirSelector.directory), '.', file)
+                    self.ui.tableFiles.setItem(rowPosition, 0, qt.QTableWidgetItem(filename))
+                    for i in range(1,3):
+                        # Construct checkbox and add to table
+                        cell_widget = qt.QWidget()
+                        chk_bx = qt.QCheckBox()
+                        chk_bx.setCheckState(qt.Qt.Checked)
+                        lay_out = qt.QHBoxLayout(cell_widget)
+                        lay_out.addWidget(chk_bx)
+                        lay_out.setAlignment(qt.Qt.AlignCenter)
+                        lay_out.setContentsMargins(0,0,0,0)
+                        cell_widget.setLayout(lay_out)
+                        self.ui.tableFiles.setCellWidget(rowPosition, i, cell_widget)
+                        # Add checkbox object to list
+                        self.checkboxes[i-1].append(chk_bx)
+                # Enable button
                 self.ui.applyButton.toolTip = "Run algorithm"
                 self.ui.applyButton.enabled = True
-                self.ui.selectButton.toolTip = "Select subjects"
-                self.ui.selectButton.enabled = True
         else: # The button must be disabled if the condition is not met
             self.ui.applyButton.toolTip = "Select the required inputs"
             self.ui.applyButton.enabled = False
-            self.ui.selectButton.toolTip = "Please select a subject"
-            self.ui.selectButton.enabled = False
+            self._bool_subj = False
+            # Clear the table
+            while (self.ui.tableFiles.rowCount > 0):
+                self.ui.tableFiles.removeRow(0)
 
     def onConfigChange(self):
         """
         Function to enable/disable 'Apply' button depending on the selected file
         """
-        if os.path.isfile(str(self.ui.configFileSelector.currentPath)): # Add case where the input is not a bids dir
+        if (os.path.isfile(str(self.ui.configFileSelector.currentPath)) and self._dir_selected): # Add case where the input is not a bids dir
             self.config = str(self.ui.configFileSelector.currentPath)
             # Read yaml file
             with open(self.config) as file:
                 inputs_dict = yaml.load(file, Loader=yaml.FullLoader)
-            data_path = os.path.join(str(self.ui.HippUnfoldDirSelector.directory), 'hippunfold')
+            data_path = str(self.ui.HippUnfoldDirSelector.directory)
             layout = BIDSLayout(data_path, validate=False)
-            files = []
-            for type_file in inputs_dict['pybids_inputs']:
-                input_filters = {
-                    'subject':'P022'
-                }
-                config_filters = inputs_dict['pybids_inputs'][type_file]['filters']
-                #Remove regex wc
-                regex_filter = None
-                if 'custom_regex' in config_filters:
-                    regex_filter = config_filters['custom_regex']
-                    del config_filters['custom_regex']
-                # Update filter
-                input_filters.update(config_filters)
-                # Look for files based on BIDS 
-                tmp_files = layout.get(**input_filters, return_type='filename')
-                # Filter based on regex if requested
-                if regex_filter != None:
-                    r = re.compile(regex_filter)
-                    tmp_files = list(filter(r.match, tmp_files))
-                # Add to list of files
-                files += tmp_files
-            for file in files:
-                print(file)
-        # Button should be activated only after files have been choosen
-        # # If the selected file is a valid one, the button is enabled.
-        # if (len(self._tmp_dir)>0 and os.path.isfile(self._tmp_dir)) and self._tmp_dir.endswith('vCastSender.exe') and (self._tmp_dir != self._dir_chosen):
-        #     self.ui.applyButton.toolTip = "Set directory"
-        #     self.ui.applyButton.enabled = True
-        # # A path has already been set. 
-        # elif len(self._tmp_dir)>0 and (self._tmp_dir == self._dir_chosen):
-        #     self.ui.applyButton.toolTip = "Please select a new path to vCastSender.exe"
-        #     self.ui.applyButton.enabled = False
-        # # Else, it is disabled.
-        # else:
-        #     self.ui.applyButton.toolTip = "Please select a valid directory for vCastSender.exe"
-        #     self.ui.applyButton.enabled = False
+            self.files = {}
+            self.display_config = {}
+            for subj in self.list_subj:
+                self.files[subj] = []
+                for type_file in inputs_dict['pybids_inputs']:
+                    input_filters = {
+                        'subject':subj
+                    }
+                    config_filters = copy.deepcopy(inputs_dict['pybids_inputs'][type_file]['filters'])
+                    #Remove regex wc
+                    regex_filter = None
+                    if 'custom_regex' in config_filters:
+                        regex_filter = config_filters['custom_regex']
+                        del config_filters['custom_regex']
+                    # Update filter
+                    input_filters.update(config_filters)
+                    # Look for files based on BIDS 
+                    tmp_files = layout.get(**input_filters, return_type='filename')
+                    # Filter based on regex if requested
+                    if regex_filter != None:
+                        r = re.compile(regex_filter)
+                        tmp_files = list(filter(r.match, tmp_files))
+                    # Add to list of files
+                    self.files[subj] += tmp_files
+                    # Save display config
+                    self.display_config[inputs_dict['pybids_inputs'][type_file]['filters']['extension']] = inputs_dict['pybids_inputs'][type_file]['load_model']
     
 
     def onDirectoryChange(self):
@@ -289,17 +312,19 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if (os.path.exists(_tmp_dir_input) and os.path.exists(_tmp_dir_output)):
             try:
                 # Update dropdown
-                data_path = os.path.join(_tmp_dir_input, 'hippunfold')
-                layout = BIDSLayout(data_path, validate=False)
-                list_subj = layout.get(return_type='id', target='subject')
+                data_path = _tmp_dir_input
+                self.BIDSLayout = BIDSLayout(data_path, validate=False)
+                self.list_subj = self.BIDSLayout.get(return_type='id', target='subject')
                 self.ui.subj.clear()
-                self.ui.subj.addItems(list_subj)
+                self.ui.subj.addItems(['Select subject']+self.list_subj)
             except ValueError:
                 self.ui.applyButton.toolTip = "Please select a valid directory"
                 self.ui.applyButton.enabled = False
             # Set to true condition indicating that we have valid input directories
             self._dir_selected = True
-            # Update botton if both conditions are true
+            # Re-run config file
+            self.onConfigChange()
+            # Update button if both conditions are true
             if self._bool_subj:
                 self.ui.applyButton.toolTip = "Run algorithm"
                 self.ui.applyButton.enabled = True
@@ -336,24 +361,35 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.filesLayout.removeRow(0)
         # List of indexes checked
         list_indexes = self.ui.subj.checkedIndexes()
+        self.ui.subj_checklists = {}
         for index_checked in list_indexes:
           index_int = index_checked.row()
           item = self.ui.subj.itemText(index_int)
-          print(item)
           # Create new check list
           checklist = ctk.ctkCheckableComboBox()
-        #   print(dir(self.ui.filesLayout))
+          checklist.addItems(self.files[item])
           # Add row to form layout
           self.ui.filesLayout.addRow(f"Files for {item}: ", checklist)
+          self.ui.subj_checklists[item] = checklist
+          # Condition to set apply botton to true
+          self.files_selected = True
+          # Enable the button
+          self.ui.applyButton.toolTip = "Run algorithm"
+          self.ui.applyButton.enabled = True
 
     def onApplyButton(self):
         """
         Configures the behavior of 'Apply' button by connecting it to the logic function.
         """
-        HippSlicerLogic().convertToSlicer(str(self.ui.HippUnfoldDirSelector.directory), 
-                                           str(self.ui.OutputDirSelector.directory), 
-                                           self.atlas_labels, self.config)
-    
+        files_checked = []
+        for subj in self.ui.subj_checklists.keys():
+            list_indexes = self.ui.subj_checklists[subj].checkedIndexes()
+            for index_checked in list_indexes:
+                index_int = index_checked.row()
+                file = self.ui.subj_checklists[subj].itemText(index_int)
+                files_checked.append(file)
+        HippSlicerLogic().convertToSlicer(str(self.ui.OutputDirSelector.directory), 
+                                           self.atlas_labels, files_checked, self.display_config)
 
 #########################################################################################
 ####                                                                                 ####
@@ -376,7 +412,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         if not parameterNode.GetParameter("LUT"):
             parameterNode.SetParameter("LUT", "Select LUT file")
 
-    def convertToSlicer(self, HippUnfoldDirPath, OutputPath, atlas_labels_file, config_file):
+    def convertToSlicer(self, OutputPath, atlas_labels_file, files_list, display_config):
         """
         Updates this file by changing the default _dir_chosen attribute from
         the HippSlicer and HippSlicerWidget classes so that the next time
@@ -385,55 +421,75 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         # Read atlas label
         atlas_labels = pd.read_table(atlas_labels_file)
         atlas_labels['lut']=atlas_labels[['r','g','b']].to_numpy().tolist()
-        # pybids
-        data_path = os.path.join(HippUnfoldDirPath, 'hippunfold')
-        layout = BIDSLayout(data_path, validate=False)
-
-        # # Test yml
-        # with open(config_file) as file:
-        #     inputs_dict = yaml.load(file, Loader=yaml.FullLoader)
-        # Retrieve filenames of dseg files
-        dseg_files = layout.get(subject='P022', extension='nii.gz', suffix='dseg', datatype='anat', return_type='filename')
-        # Retrieve filenames of surf files
-        surf_files = []
-        for isurf in ('inner','midthickness','outer'):
-            surf_files += layout.get(subject='P022', extension='.surf.gii', suffix=f'{isurf}', return_type='filename')
-        r = re.compile("^.+_space-T1w_den-0p5mm_label-hipp_.+.surf.gii$")
-        surf_files = list(filter(r.match, surf_files))
-
+        # Create dictionary of file types
+        files_dict = {}
+        for file in files_list:
+            filename = Path(file)
+            ext = ''
+            while filename.suffix:
+                ext = filename.suffix + ext
+                filename = filename.with_suffix('')
+            if ext in files_dict:
+                files_dict[ext].append(file)
+            else:
+                files_dict[ext] = [file]
         
-        
-        
+        # For each type of file, run the corresponding function
+        for extension in files_dict:
+            if extension == '.surf.gii':
+                print('surf')
+                if extension in display_config:
+                    print('here surf')
+                    self.convert_surf(files_dict[extension], OutputPath, display_config[extension])
+                else:
+                    self.convert_surf(files_dict[extension], OutputPath)
+            elif extension == '.nii.gz':
+                print('dseg')
+                if extension in display_config:
+                    print('Here dseg')
+                    self.convert_dseg(files_dict[extension], OutputPath, atlas_labels, display_config[extension])
+                else:
+                    self.convert_dseg(files_dict[extension], OutputPath, atlas_labels)
+            else:
+                print(f'File type {extension} is not supported.')   
 
-    def convert_dseg(self, dseg_files, OutputPath, atlas_labels):
+    def convert_dseg(self, dseg_files, OutputPath, atlas_labels, load_model=True):
         for dseg in dseg_files:
             # Find base file name to create output
             filename_with_extension = os.path.basename(dseg)
             base_filename = filename_with_extension.split('.', 1)[0]
-            # Create anat folder if it doesn't exist
-            if not os.path.exists(os.path.join(OutputPath, 'anat/')):
-                os.mkdir(os.path.join(OutputPath, 'anat/'))
-            seg_out_fname = os.path.join(OutputPath, 'anat/', f'{base_filename}.seg.nrrd')
+            # Find parent dir
+            dir_re = r'sub-.+/[a-z]+/'
+            parent_dir = re.findall(dir_re, dseg, re.IGNORECASE)[0]
+            # Create sub and anat folder if it doesn't exist  
+            if not os.path.exists(os.path.join(OutputPath, parent_dir)):
+                os.makedirs(os.path.join(OutputPath, parent_dir))
+            seg_out_fname = os.path.join(OutputPath, parent_dir, f'{base_filename}.seg.nrrd')
             # Load data from dseg file
             data_obj=nb.load(dseg)
             self.write_nrrd(data_obj, seg_out_fname, atlas_labels)
-            seg = slicer.util.loadSegmentation(seg_out_fname)
-            seg.CreateClosedSurfaceRepresentation()
+            if load_model:
+                seg = slicer.util.loadSegmentation(seg_out_fname)
+                seg.CreateClosedSurfaceRepresentation()
     
-    def convert_surf(self):
+    def convert_surf(self, surf_files, OutputPath, load_model=True):
         for surf in surf_files:
             # Find base file name to create output
             filename_with_extension = os.path.basename(surf)
             base_filename = filename_with_extension.split('.', 1)[0]
+            # Find parent dir
+            dir_re = r'sub-.+/[a-z]+/'
+            parent_dir = re.findall(dir_re, surf, re.IGNORECASE)[0]
             # Create surf folder if it doesn't exist
-            if not os.path.exists(os.path.join(OutputPath, 'surf/')):
-                os.mkdir(os.path.join(OutputPath, 'surf/'))
-            gii_out_fname = os.path.join(OutputPath, 'surf/', f'{base_filename}.ply')
+            if not os.path.exists(os.path.join(OutputPath, parent_dir)):
+                os.makedirs(os.path.join(OutputPath, parent_dir))
+            gii_out_fname = os.path.join(OutputPath, parent_dir, f'{base_filename}.ply')
             gii_data = nb.load(surf)
             vertices = gii_data.get_arrays_from_intent('NIFTI_INTENT_POINTSET')[0].data
             faces = gii_data.get_arrays_from_intent('NIFTI_INTENT_TRIANGLE')[0].data
             self.write_ply(gii_out_fname,vertices,faces,'SPACE=RAS')
-            slicer.util.loadModel(gii_out_fname)
+            if load_model:
+                slicer.util.loadModel(gii_out_fname)
             
     # Functions to compute files
     def bounding_box(self, seg):
