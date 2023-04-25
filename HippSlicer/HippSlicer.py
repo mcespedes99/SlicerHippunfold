@@ -147,6 +147,8 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.OutputDirSelector.connect("directoryChanged(QString)", self.onDirectoryChange)
         self.ui.subj.connect('currentIndexChanged(int)', self.onSubjChange)
         self.ui.configFileSelector.connect("currentPathChanged(QString)", self.onConfigChange)
+        self.ui.VisibleAll.connect('checkedIndexesChanged()', self.onVisibleAllChange)
+        self.ui.ConvertAll.connect('checkedIndexesChanged()', self.onConvertAllChange)
         # print('ca')
 
         # Buttons
@@ -299,6 +301,27 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     # Save display config
                     self.display_config[inputs_dict['pybids_inputs'][type_file]['filters']['extension']] = inputs_dict['pybids_inputs'][type_file]['load_model']
     
+    def onVisibleAllChange(self):
+        """
+        Function to select all or select none
+        """
+        model = self.ui.VisibleAll.model()
+        index_int = self.ui.VisibleAll.currentIndex
+        for row in range(model.rowCount()):
+            index = model.index(row, 0)
+            if model.data(index, qt.Qt.CheckStateRole) == qt.Qt.Checked and index.row()!=index_int:
+                model.itemFromIndex(index).setCheckState(qt.Qt.Unchecked)
+
+    def onConvertAllChange(self):
+        """
+        Function to select all or select none
+        """
+        model = self.ui.ConvertAll.model()
+        index_int = self.ui.ConvertAll.currentIndex
+        for row in range(model.rowCount()):
+            index = model.index(row, 0)
+            if model.data(index, qt.Qt.CheckStateRole) == qt.Qt.Checked and index.row()!=index_int:
+                model.itemFromIndex(index).setCheckState(qt.Qt.Unchecked)
 
     def onDirectoryChange(self):
         """
