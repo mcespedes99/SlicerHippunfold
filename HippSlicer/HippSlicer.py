@@ -126,8 +126,10 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self.ui.configFileSelector.setCurrentPath(self.config)
 
-        # self.ui.subj.addItems(['Select subject'])
-            
+        # Combo boxes
+        # print(self.ui.VisibleAll.currentText)
+        # self.ui.VisibleAll.setCurrentText('---')
+        
 
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
         # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
@@ -250,8 +252,22 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         lay_out.setContentsMargins(0,0,0,0)
                         cell_widget.setLayout(lay_out)
                         self.ui.tableFiles.setCellWidget(rowPosition, i, cell_widget)
-                        # Add checkbox object to list
+                        # Add checkbox object to list and connect it to function
+                        if i==2:
+                            chk_bx.stateChanged.connect(self.chkBoxVisibleChange)
+                        else:
+                            chk_bx.stateChanged.connect(self.chkBoxConvertChange)
                         self.checkboxes[i-1].append(chk_bx)
+                # Update state of All/None checkboxes
+                comboChkBoxes = [self.ui.VisibleAll, self.ui.ConvertAll]
+                for comboBox in comboChkBoxes:
+                    model = comboBox.model()
+                    for index in range(comboBox.count):
+                        indexqt = model.index(index, 0)
+                        if comboBox.itemText(index) == 'All':
+                            model.itemFromIndex(indexqt).setCheckState(qt.Qt.Checked)
+                        else:
+                            model.itemFromIndex(indexqt).setCheckState(qt.Qt.Unchecked)
                 # Enable button
                 self.ui.applyButton.toolTip = "Run algorithm"
                 self.ui.applyButton.enabled = True
@@ -311,6 +327,14 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             index = model.index(row, 0)
             if model.data(index, qt.Qt.CheckStateRole) == qt.Qt.Checked and index.row()!=index_int:
                 model.itemFromIndex(index).setCheckState(qt.Qt.Unchecked)
+            elif model.data(index, qt.Qt.CheckStateRole) == qt.Qt.Checked and index.row()==index_int:
+                if self.ui.VisibleAll.currentText == 'All':
+                    for chk_bx in self.checkboxes[1]:
+                        chk_bx.setCheckState(qt.Qt.Checked)
+                elif self.ui.VisibleAll.currentText == 'None':
+                    for chk_bx in self.checkboxes[1]:
+                        chk_bx.setCheckState(qt.Qt.Unchecked)
+        self.chkBoxVisibleChange()
 
     def onConvertAllChange(self):
         """
@@ -322,6 +346,14 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             index = model.index(row, 0)
             if model.data(index, qt.Qt.CheckStateRole) == qt.Qt.Checked and index.row()!=index_int:
                 model.itemFromIndex(index).setCheckState(qt.Qt.Unchecked)
+            elif model.data(index, qt.Qt.CheckStateRole) == qt.Qt.Checked and index.row()==index_int:
+                if self.ui.ConvertAll.currentText == 'All':
+                    for chk_bx in self.checkboxes[0]:
+                        chk_bx.setCheckState(qt.Qt.Checked)
+                elif self.ui.ConvertAll.currentText == 'None':
+                    for chk_bx in self.checkboxes[0]:
+                        chk_bx.setCheckState(qt.Qt.Unchecked)
+        self.chkBoxConvertChange()
 
     def onDirectoryChange(self):
         """
@@ -357,7 +389,47 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.applyButton.enabled = False
             self._dir_selected = False
         
-
+    def chkBoxVisibleChange(self):
+        # Look for amount of items checked
+        item_checked = 0
+        for chk_bx in self.checkboxes[1]:
+            if chk_bx.checkState() == qt.Qt.Checked:
+                item_checked += 1
+        # Update all/none state
+        model = self.ui.VisibleAll.model()
+        if item_checked == len(self.checkboxes[1]):
+            state = 'All'
+        elif item_checked == 0:
+            state = 'None'
+        else:
+            state = 'Some'
+        for index in range(self.ui.VisibleAll.count):
+            indexqt = model.index(index, 0)
+            if self.ui.VisibleAll.itemText(index) == state:
+                model.itemFromIndex(indexqt).setCheckState(qt.Qt.Checked)
+            else:
+                model.itemFromIndex(indexqt).setCheckState(qt.Qt.Unchecked)
+    
+    def chkBoxConvertChange(self):
+        # Look for amount of items checked
+        item_checked = 0
+        for chk_bx in self.checkboxes[0]:
+            if chk_bx.checkState() == qt.Qt.Checked:
+                item_checked += 1
+        # Update all/none state
+        model = self.ui.ConvertAll.model()
+        if item_checked == len(self.checkboxes[0]):
+            state = 'All'
+        elif item_checked == 0:
+            state = 'None'
+        else:
+            state = 'Some'
+        for index in range(self.ui.ConvertAll.count):
+            indexqt = model.index(index, 0)
+            if self.ui.ConvertAll.itemText(index) == state:
+                model.itemFromIndex(indexqt).setCheckState(qt.Qt.Checked)
+            else:
+                model.itemFromIndex(indexqt).setCheckState(qt.Qt.Unchecked)
 
     def updateParameterNodeFromGUI(self, caller=None, event=None):
         """
