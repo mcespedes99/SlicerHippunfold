@@ -116,7 +116,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.applyButton.enabled = False
         # TableWidget
         header = self.ui.tableFiles.horizontalHeader()
-        header.setDefaultSectionSize(75)
+        header.setDefaultSectionSize(80)
         header.setSectionResizeMode(0, qt.QHeaderView.Stretch)
         header.setSectionResizeMode(1, qt.QHeaderView.Fixed)
         header.setSectionResizeMode(2, qt.QHeaderView.Fixed)
@@ -152,7 +152,6 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.VisibleAll.connect('checkedIndexesChanged()', self.onVisibleAllChange)
         self.ui.ConvertAll.connect('checkedIndexesChanged()', self.onConvertAllChange)
         # print('ca')
-
         # Buttons
         self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
 
@@ -227,6 +226,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
         if self._parameterNode is None or self._updatingGUIFromParameterNode:
             return
+        self.checkboxes = [[],[]]
         # Set state of button
         if self.ui.subj.currentIndex != 0:
             self._bool_subj = True
@@ -245,7 +245,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         # Construct checkbox and add to table
                         cell_widget = qt.QWidget()
                         chk_bx = qt.QCheckBox()
-                        chk_bx.setCheckState(qt.Qt.Checked)
+                        chk_bx.setCheckState(qt.Qt.Unchecked)
                         lay_out = qt.QHBoxLayout(cell_widget)
                         lay_out.addWidget(chk_bx)
                         lay_out.setAlignment(qt.Qt.AlignCenter)
@@ -264,7 +264,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     model = comboBox.model()
                     for index in range(comboBox.count):
                         indexqt = model.index(index, 0)
-                        if comboBox.itemText(index) == 'All':
+                        if comboBox.itemText(index) == 'Check':
                             model.itemFromIndex(indexqt).setCheckState(qt.Qt.Checked)
                         else:
                             model.itemFromIndex(indexqt).setCheckState(qt.Qt.Unchecked)
@@ -291,7 +291,6 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             data_path = str(self.ui.HippUnfoldDirSelector.directory)
             layout = BIDSLayout(data_path, validate=False)
             self.files = {}
-            self.display_config = {}
             for subj in self.list_subj:
                 self.files[subj] = []
                 for type_file in inputs_dict['pybids_inputs']:
@@ -314,13 +313,12 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         tmp_files = list(filter(r.match, tmp_files))
                     # Add to list of files
                     self.files[subj] += tmp_files
-                    # Save display config
-                    self.display_config[inputs_dict['pybids_inputs'][type_file]['filters']['extension']] = inputs_dict['pybids_inputs'][type_file]['load_model']
-    
+
     def onVisibleAllChange(self):
         """
         Function to select all or select none
         """
+        print()
         model = self.ui.VisibleAll.model()
         index_int = self.ui.VisibleAll.currentIndex
         for row in range(model.rowCount()):
@@ -328,13 +326,14 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             if model.data(index, qt.Qt.CheckStateRole) == qt.Qt.Checked and index.row()!=index_int:
                 model.itemFromIndex(index).setCheckState(qt.Qt.Unchecked)
             elif model.data(index, qt.Qt.CheckStateRole) == qt.Qt.Checked and index.row()==index_int:
-                if self.ui.VisibleAll.currentText == 'All':
+                if self.ui.VisibleAll.currentText == 'Check':
                     for chk_bx in self.checkboxes[1]:
                         chk_bx.setCheckState(qt.Qt.Checked)
-                elif self.ui.VisibleAll.currentText == 'None':
+                elif self.ui.VisibleAll.currentText == 'Uncheck':
                     for chk_bx in self.checkboxes[1]:
                         chk_bx.setCheckState(qt.Qt.Unchecked)
-        self.chkBoxVisibleChange()
+        if len(self.checkboxes[1])>0:
+            self.chkBoxVisibleChange()
 
     def onConvertAllChange(self):
         """
@@ -347,13 +346,14 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             if model.data(index, qt.Qt.CheckStateRole) == qt.Qt.Checked and index.row()!=index_int:
                 model.itemFromIndex(index).setCheckState(qt.Qt.Unchecked)
             elif model.data(index, qt.Qt.CheckStateRole) == qt.Qt.Checked and index.row()==index_int:
-                if self.ui.ConvertAll.currentText == 'All':
+                if self.ui.ConvertAll.currentText == 'Check':
                     for chk_bx in self.checkboxes[0]:
                         chk_bx.setCheckState(qt.Qt.Checked)
-                elif self.ui.ConvertAll.currentText == 'None':
+                elif self.ui.ConvertAll.currentText == 'Uncheck':
                     for chk_bx in self.checkboxes[0]:
                         chk_bx.setCheckState(qt.Qt.Unchecked)
-        self.chkBoxConvertChange()
+        if len(self.checkboxes[0])>0:
+            self.chkBoxConvertChange()
 
     def onDirectoryChange(self):
         """
@@ -398,9 +398,9 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Update all/none state
         model = self.ui.VisibleAll.model()
         if item_checked == len(self.checkboxes[1]):
-            state = 'All'
+            state = 'Check'
         elif item_checked == 0:
-            state = 'None'
+            state = 'Uncheck'
         else:
             state = 'Some'
         for index in range(self.ui.VisibleAll.count):
@@ -419,9 +419,9 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Update all/none state
         model = self.ui.ConvertAll.model()
         if item_checked == len(self.checkboxes[0]):
-            state = 'All'
+            state = 'Check'
         elif item_checked == 0:
-            state = 'None'
+            state = 'Uncheck'
         else:
             state = 'Some'
         for index in range(self.ui.ConvertAll.count):
@@ -446,45 +446,23 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._parameterNode.SetNodeReferenceID("OutputDir", self.ui.OutputDirSelector.currentNodeID)
 
         self._parameterNode.EndModify(wasModified)
-    
-    def onSelectButton(self):
-        """
-        Configures the behavior of 'Apply' button by connecting it to the logic function.
-        """
-        # First clear content
-        for i in range(self.ui.filesLayout.count()):
-            self.ui.filesLayout.removeRow(0)
-        # List of indexes checked
-        list_indexes = self.ui.subj.checkedIndexes()
-        self.ui.subj_checklists = {}
-        for index_checked in list_indexes:
-          index_int = index_checked.row()
-          item = self.ui.subj.itemText(index_int)
-          # Create new check list
-          checklist = ctk.ctkCheckableComboBox()
-          checklist.addItems(self.files[item])
-          # Add row to form layout
-          self.ui.filesLayout.addRow(f"Files for {item}: ", checklist)
-          self.ui.subj_checklists[item] = checklist
-          # Condition to set apply botton to true
-          self.files_selected = True
-          # Enable the button
-          self.ui.applyButton.toolTip = "Run algorithm"
-          self.ui.applyButton.enabled = True
 
     def onApplyButton(self):
         """
         Configures the behavior of 'Apply' button by connecting it to the logic function.
         """
-        files_checked = []
-        for subj in self.ui.subj_checklists.keys():
-            list_indexes = self.ui.subj_checklists[subj].checkedIndexes()
-            for index_checked in list_indexes:
-                index_int = index_checked.row()
-                file = self.ui.subj_checklists[subj].itemText(index_int)
-                files_checked.append(file)
+        # Retrieve files to be converted 
+        files_convert = []
+        for index, chk_bx in enumerate(self.checkboxes[0]):
+            if chk_bx.checkState() == qt.Qt.Checked:
+                files_convert.append(self.ui.tableFiles.item(index,0).text())
+        # Retrieve files to be visible 
+        files_visible = []
+        for index, chk_bx in enumerate(self.checkboxes[1]):
+            if chk_bx.checkState() == qt.Qt.Checked:
+                files_visible.append(self.ui.tableFiles.item(index,0).text())
         HippSlicerLogic().convertToSlicer(str(self.ui.OutputDirSelector.directory), 
-                                           self.atlas_labels, files_checked, self.display_config)
+                                           self.atlas_labels, files_convert, files_visible)
 
 #########################################################################################
 ####                                                                                 ####
@@ -507,7 +485,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         if not parameterNode.GetParameter("LUT"):
             parameterNode.SetParameter("LUT", "Select LUT file")
 
-    def convertToSlicer(self, OutputPath, atlas_labels_file, files_list, display_config):
+    def convertToSlicer(self, OutputPath, atlas_labels_file, files_convert, files_visible):
         """
         Updates this file by changing the default _dir_chosen attribute from
         the HippSlicer and HippSlicerWidget classes so that the next time

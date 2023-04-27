@@ -5,10 +5,8 @@ pybids_inputs:
       extension: '.surf.gii'
       suffix: ['inner','midthickness','outer']
       custom_regex: "^.+_space-T1w_den-0p5mm_label-hipp_.+.surf.gii$"
-    load_model: False
   dseg:
     filters:
       extension: '.nii.gz'
       suffix: 'dseg'
       datatype: 'anat'
-    load_model: True

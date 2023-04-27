@@ -165,24 +165,27 @@
        <widget class="ctkCheckableComboBox" name="ConvertAll">
         <property name="minimumSize">
          <size>
-          <width>75</width>
+          <width>80</width>
           <height>0</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
-          <width>75</width>
+          <width>80</width>
           <height>16777215</height>
          </size>
         </property>
+        <property name="toolTip">
+         <string>Check or uncheck all files</string>
+        </property>
         <item>
          <property name="text">
-          <string>All</string>
+          <string>Check</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>None</string>
+          <string>Uncheck</string>
          </property>
         </item>
        </widget>
@@ -191,24 +194,27 @@
        <widget class="ctkCheckableComboBox" name="VisibleAll">
         <property name="minimumSize">
          <size>
-          <width>75</width>
+          <width>80</width>
           <height>0</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
-          <width>75</width>
+          <width>80</width>
           <height>16777215</height>
          </size>
         </property>
+        <property name="toolTip">
+         <string>Check or uncheck all files</string>
+        </property>
         <item>
          <property name="text">
-          <string>All</string>
+          <string>Check</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>None</string>
+          <string>Uncheck</string>
          </property>
         </item>
        </widget>
