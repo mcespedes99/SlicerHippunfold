@@ -245,21 +245,17 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         # Construct checkbox and add to table
                         cell_widget = qt.QWidget()
                         chk_bx = qt.QCheckBox()
-                        chk_bx.setCheckState(qt.Qt.Unchecked)
+                        chk_bx.setCheckState(qt.Qt.Checked)
                         lay_out = qt.QHBoxLayout(cell_widget)
                         lay_out.addWidget(chk_bx)
                         lay_out.setAlignment(qt.Qt.AlignCenter)
                         lay_out.setContentsMargins(0,0,0,0)
                         cell_widget.setLayout(lay_out)
                         self.ui.tableFiles.setCellWidget(rowPosition, i, cell_widget)
-                        # Add checkbox object to list and connect it to function
-                        if i==2:
-                            chk_bx.stateChanged.connect(self.chkBoxVisibleChange)
-                        else:
-                            chk_bx.stateChanged.connect(self.chkBoxConvertChange)
+                        # Add checkbox object to list
                         self.checkboxes[i-1].append(chk_bx)
                 # Update state of All/None checkboxes
-                comboChkBoxes = [self.ui.VisibleAll, self.ui.ConvertAll]
+                comboChkBoxes = [self.ui.ConvertAll, self.ui.VisibleAll]
                 for comboBox in comboChkBoxes:
                     model = comboBox.model()
                     for index in range(comboBox.count):
@@ -268,6 +264,11 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                             model.itemFromIndex(indexqt).setCheckState(qt.Qt.Checked)
                         else:
                             model.itemFromIndex(indexqt).setCheckState(qt.Qt.Unchecked)
+                # Connect files checkboxes to function
+                for chk_bx_conv in self.checkboxes[0]:
+                    chk_bx_conv.stateChanged.connect(self.chkBoxConvertChange)
+                for chk_box_vis in self.checkboxes[1]:
+                    chk_box_vis.stateChanged.connect(self.chkBoxVisibleChange)
                 # Enable button
                 self.ui.applyButton.toolTip = "Run algorithm"
                 self.ui.applyButton.enabled = True
@@ -318,7 +319,6 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
         Function to select all or select none
         """
-        print()
         model = self.ui.VisibleAll.model()
         index_int = self.ui.VisibleAll.currentIndex
         for row in range(model.rowCount()):
@@ -391,10 +391,18 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         
     def chkBoxVisibleChange(self):
         # Look for amount of items checked
-        item_checked = 0
-        for chk_bx in self.checkboxes[1]:
-            if chk_bx.checkState() == qt.Qt.Checked:
-                item_checked += 1
+        if len(self.checkboxes[0]) == len(self.checkboxes[1]):
+            item_checked = 0
+            for chk_bx_conv, chk_box_vis in zip(self.checkboxes[0], self.checkboxes[1]):
+                if chk_box_vis.checkState() == qt.Qt.Checked and chk_bx_conv.checkState() == qt.Qt.Unchecked:
+                    chk_box_vis.setCheckState(qt.Qt.Unchecked)
+                elif chk_box_vis.checkState() == qt.Qt.Checked:
+                    item_checked += 1
+        else:
+            item_checked = 0
+            for chk_bx in self.checkboxes[1]:
+                if chk_bx.checkState() == qt.Qt.Checked:
+                    item_checked += 1
         # Update all/none state
         model = self.ui.VisibleAll.model()
         if item_checked == len(self.checkboxes[1]):
@@ -406,6 +414,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         for index in range(self.ui.VisibleAll.count):
             indexqt = model.index(index, 0)
             if self.ui.VisibleAll.itemText(index) == state:
+                self.ui.VisibleAll.setCurrentIndex(index)
                 model.itemFromIndex(indexqt).setCheckState(qt.Qt.Checked)
             else:
                 model.itemFromIndex(indexqt).setCheckState(qt.Qt.Unchecked)
@@ -427,9 +436,12 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         for index in range(self.ui.ConvertAll.count):
             indexqt = model.index(index, 0)
             if self.ui.ConvertAll.itemText(index) == state:
+                self.ui.ConvertAll.setCurrentIndex(index)
                 model.itemFromIndex(indexqt).setCheckState(qt.Qt.Checked)
             else:
                 model.itemFromIndex(indexqt).setCheckState(qt.Qt.Unchecked)
+        # Update visible boxes
+        self.chkBoxVisibleChange()
 
     def updateParameterNodeFromGUI(self, caller=None, event=None):
         """
