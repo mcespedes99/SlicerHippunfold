@@ -228,7 +228,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             return
         self.checkboxes = [[],[]]
         # Set state of button
-        if self.ui.subj.currentIndex != 0:
+        if self.ui.subj.currentIndex > 0:
             self._bool_subj = True
             if self._dir_selected:
                 # Clear the table
@@ -284,7 +284,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
         Function to enable/disable 'Apply' button depending on the selected file
         """
-        if (os.path.isfile(str(self.ui.configFileSelector.currentPath)) and self._dir_selected): # Add case where the input is not a bids dir
+        if (os.path.isfile(str(self.ui.configFileSelector.currentPath)) and self._dir_selected):
             self.config = str(self.ui.configFileSelector.currentPath)
             # Read yaml file
             with open(self.config) as file:
@@ -467,12 +467,12 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         files_convert = []
         for index, chk_bx in enumerate(self.checkboxes[0]):
             if chk_bx.checkState() == qt.Qt.Checked:
-                files_convert.append(self.ui.tableFiles.item(index,0).text())
+                files_convert.append(os.path.join(str(self.ui.HippUnfoldDirSelector.directory), self.ui.tableFiles.item(index,0).text()[2:]))
         # Retrieve files to be visible 
         files_visible = []
         for index, chk_bx in enumerate(self.checkboxes[1]):
             if chk_bx.checkState() == qt.Qt.Checked:
-                files_visible.append(self.ui.tableFiles.item(index,0).text())
+                files_visible.append(os.path.join(str(self.ui.HippUnfoldDirSelector.directory), self.ui.tableFiles.item(index,0).text()[2:]))
         HippSlicerLogic().convertToSlicer(str(self.ui.OutputDirSelector.directory), 
                                            self.atlas_labels, files_convert, files_visible)
 
@@ -508,7 +508,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         atlas_labels['lut']=atlas_labels[['r','g','b']].to_numpy().tolist()
         # Create dictionary of file types
         files_dict = {}
-        for file in files_list:
+        for file in files_convert:
             filename = Path(file)
             ext = ''
             while filename.suffix:
@@ -522,23 +522,13 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         # For each type of file, run the corresponding function
         for extension in files_dict:
             if extension == '.surf.gii':
-                print('surf')
-                if extension in display_config:
-                    print('here surf')
-                    self.convert_surf(files_dict[extension], OutputPath, display_config[extension])
-                else:
-                    self.convert_surf(files_dict[extension], OutputPath)
+                self.convert_surf(files_dict[extension], OutputPath, files_visible)
             elif extension == '.nii.gz':
-                print('dseg')
-                if extension in display_config:
-                    print('Here dseg')
-                    self.convert_dseg(files_dict[extension], OutputPath, atlas_labels, display_config[extension])
-                else:
-                    self.convert_dseg(files_dict[extension], OutputPath, atlas_labels)
+                self.convert_dseg(files_dict[extension], OutputPath, atlas_labels, files_visible)
             else:
                 print(f'File type {extension} is not supported.')   
 
-    def convert_dseg(self, dseg_files, OutputPath, atlas_labels, load_model=True):
+    def convert_dseg(self, dseg_files, OutputPath, atlas_labels, files_visible):
         for dseg in dseg_files:
             # Find base file name to create output
             filename_with_extension = os.path.basename(dseg)
@@ -553,11 +543,11 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
             # Load data from dseg file
             data_obj=nb.load(dseg)
             self.write_nrrd(data_obj, seg_out_fname, atlas_labels)
-            if load_model:
+            if dseg in files_visible:
                 seg = slicer.util.loadSegmentation(seg_out_fname)
                 seg.CreateClosedSurfaceRepresentation()
     
-    def convert_surf(self, surf_files, OutputPath, load_model=True):
+    def convert_surf(self, surf_files, OutputPath, files_visible):
         for surf in surf_files:
             # Find base file name to create output
             filename_with_extension = os.path.basename(surf)
@@ -573,7 +563,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
             vertices = gii_data.get_arrays_from_intent('NIFTI_INTENT_POINTSET')[0].data
             faces = gii_data.get_arrays_from_intent('NIFTI_INTENT_TRIANGLE')[0].data
             self.write_ply(gii_out_fname,vertices,faces,'SPACE=RAS')
-            if load_model:
+            if surf in files_visible:
                 slicer.util.loadModel(gii_out_fname)
             
     # Functions to compute files
