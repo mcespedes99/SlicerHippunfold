@@ -40,6 +40,7 @@ try:
 except:
     os.system('PythonSlicer -m pip install pyyaml')
     import yaml
+
 #
 # HippSlicer. Module to connect 3D Slicer with vCastSender application.
 #
@@ -363,7 +364,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         _tmp_dir_output = str(self.ui.OutputDirSelector.directory) 
 
         # Bool to change button status
-        # If the selected file is a valid one, the button is enabled.
+        # If the selected file is a valid one, the button is enabled.   
         if (os.path.exists(_tmp_dir_input) and os.path.exists(_tmp_dir_output)):
             try:
                 # Update dropdown

@@ -1,5 +1,6 @@
 # config.yml file
 pybids_inputs:
+  # Hippunfold
   surf:
     filters:
       extension: '.surf.gii'
@@ -10,3 +11,9 @@ pybids_inputs:
       extension: '.nii.gz'
       suffix: 'dseg'
       datatype: 'anat'
+  #fmriprep
+  surf2:
+    filters:
+      extension: '.surf.gii'
+      datatype: 'anat'
+      # custom_regex: "^.+_space-T1w_den-0p5mm_label-hipp_.+.surf.gii$"
