@@ -1,4 +1,6 @@
 # config.yml file
+hippunfold: True
+
 pybids_inputs:
   # Hippunfold
   surf:

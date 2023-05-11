@@ -91,6 +91,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Condition to set apply botton to true based on files selection
         self.files_selected = False
         self.checkboxes = [[],[]] # convert and visible
+        self.labels_color = {}
 
     def setup(self):
         """
@@ -315,6 +316,8 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         tmp_files = list(filter(r.match, tmp_files))
                     # Add to list of files
                     self.files[subj] += tmp_files
+                if inputs_dict['hippunfold']:
+                    self.labels_color[subj] = layout.get(subject=subj, extension='label.gii', return_type='filename')
 
     def onVisibleAllChange(self):
         """
@@ -474,8 +477,12 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         for index, chk_bx in enumerate(self.checkboxes[1]):
             if chk_bx.checkState() == qt.Qt.Checked:
                 files_visible.append(os.path.join(str(self.ui.HippUnfoldDirSelector.directory), self.ui.tableFiles.item(index,0).text()[2:]))
+        if self.labels_color:
+            labels = self.labels_color[self.ui.subj.currentText]
+        else:
+            labels = None
         HippSlicerLogic().convertToSlicer(str(self.ui.OutputDirSelector.directory), 
-                                           self.atlas_labels, files_convert, files_visible)
+                                           self.atlas_labels, files_convert, files_visible, labels)
 
 #########################################################################################
 ####                                                                                 ####
@@ -498,7 +505,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         if not parameterNode.GetParameter("LUT"):
             parameterNode.SetParameter("LUT", "Select LUT file")
 
-    def convertToSlicer(self, OutputPath, atlas_labels_file, files_convert, files_visible):
+    def convertToSlicer(self, OutputPath, atlas_labels_file, files_convert, files_visible, label_files):
         """
         Updates this file by changing the default _dir_chosen attribute from
         the HippSlicer and HippSlicerWidget classes so that the next time
@@ -523,7 +530,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         # For each type of file, run the corresponding function
         for extension in files_dict:
             if extension == '.surf.gii':
-                self.convert_surf(files_dict[extension], OutputPath, files_visible)
+                self.convert_surf(files_dict[extension], OutputPath, files_visible, label_files, atlas_labels)
             elif extension == '.nii.gz':
                 self.convert_dseg(files_dict[extension], OutputPath, atlas_labels, files_visible)
             else:
@@ -548,7 +555,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
                 seg = slicer.util.loadSegmentation(seg_out_fname)
                 seg.CreateClosedSurfaceRepresentation()
     
-    def convert_surf(self, surf_files, OutputPath, files_visible):
+    def convert_surf(self, surf_files, OutputPath, files_visible, label_files, atlas_labels):
         for surf in surf_files:
             # Find base file name to create output
             filename_with_extension = os.path.basename(surf)
@@ -560,10 +567,23 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
             if not os.path.exists(os.path.join(OutputPath, parent_dir)):
                 os.makedirs(os.path.join(OutputPath, parent_dir))
             gii_out_fname = os.path.join(OutputPath, parent_dir, f'{base_filename}.ply')
+            # Extract geometric data
             gii_data = nb.load(surf)
             vertices = gii_data.get_arrays_from_intent('NIFTI_INTENT_POINTSET')[0].data
             faces = gii_data.get_arrays_from_intent('NIFTI_INTENT_TRIANGLE')[0].data
-            self.write_ply(gii_out_fname,vertices,faces,'SPACE=RAS')
+            # Extract color data
+            vert_colors = None
+            if label_files:
+                ## TODO: CUSTOM TO HIPPUNFOLD FOR NOW
+                re_sub_hemi = r'/(sub-.+_hemi-[A-Z])'
+                sub_hemi = re.search(re_sub_hemi,surf).group(1)
+                # Get label file
+                r = re.compile(sub_hemi)
+                label_file = list(filter(r.search, label_files))[0]
+                vert_colors_idx = nb.load(label_file).agg_data().tolist()
+                # Extract colors from df 
+                vert_colors = atlas_labels.loc[vert_colors_idx,['r','g','b']]
+            self.write_ply(gii_out_fname,vertices,faces,vert_colors,'SPACE=RAS')
             if surf in files_visible:
                 slicer.util.loadModel(gii_out_fname)
             
@@ -626,7 +646,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         
         nrrd.write(out_file, seg_cut, keyvaluepairs)
 
-    def write_ply(self, filename, vertices, faces, comment=None):
+    def write_ply(self, filename, vertices, faces, vertices_colors, comment=None):
         # infer number of vertices and faces
         number_vertices = vertices.shape[0]
         number_faces = faces.shape[0]
@@ -638,6 +658,9 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
                 'property float x',
                 'property float y',
                 'property float z',
+                'property uchar red',
+                'property uchar green',
+                'property uchar blue',
                 'element face %i' % number_faces,
                 'property list uchar int vertex_indices',
                 'end_header'
@@ -645,6 +668,14 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         header_df = pd.DataFrame(header)
         # make dataframe from vertices
         vertex_df = pd.DataFrame(vertices)
+        # TODO: currently custom to work with HippUnfold
+        if type(vertices_colors) != type(None):
+            colors = ['red', 'green', 'blue']
+            # for idx, color in enumerate(colors):
+            #     vertex_df.insert(idx+3, color, [255 for element in range(vertex_df.shape[0])])
+            vertex_df.insert(3, 'red', vertices_colors['r'].tolist())
+            vertex_df.insert(4, 'green', vertices_colors['g'].tolist())
+            vertex_df.insert(5, 'blue', vertices_colors['b'].tolist())
         # make dataframe from faces, adding first row of 3s (indicating triangles)
         triangles = np.reshape(3 * (np.ones(number_faces)), (number_faces, 1))
         triangles = triangles.astype(int)
