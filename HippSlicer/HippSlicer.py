@@ -613,6 +613,8 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
                     modelNode.AddPointScalars(vtkarr)
                     modelNode.GetDisplayNode().SetActiveScalar("HippUnfoldScalars", vtk.vtkAssignAttribute.POINT_DATA)
                     modelNode.GetDisplayNode().SetAndObserveColorNodeID(colorTableNode.GetID())
+                    modelNode.GetDisplayNode().SetAutoScalarRange(False)
+                    modelNode.GetDisplayNode().SetScalarRange(0.0, 7.0)
                     modelNode.GetDisplayNode().SetScalarVisibility(True)
                 
     # Functions to compute files
