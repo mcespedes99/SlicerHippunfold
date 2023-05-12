@@ -8,6 +8,7 @@ import re
 from qt import QStandardItem
 from pathlib import Path
 import copy
+from vtk.util import numpy_support
 
 
 # Packages that might need to be installed
@@ -580,13 +581,40 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
                 # Get label file
                 r = re.compile(sub_hemi)
                 label_file = list(filter(r.search, label_files))[0]
-                vert_colors_idx = nb.load(label_file).agg_data().tolist()
+                vert_colors_idx = (nb.load(label_file).agg_data() -1).tolist()
+                # print(vert_colors_idx[0:10])
                 # Extract colors from df 
                 vert_colors = atlas_labels.loc[vert_colors_idx,['r','g','b']]
+                # print(vert_colors.head())
             self.write_ply(gii_out_fname,vertices,faces,vert_colors,'SPACE=RAS')
             if surf in files_visible:
-                slicer.util.loadModel(gii_out_fname)
-            
+                modelNode = slicer.util.loadModel(gii_out_fname)
+                if type(vert_colors) != type(None):
+                    # Create color table
+                    colorTableNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLProceduralColorNode", "HippUnfoldColors")
+                    colorTableNode.SetType(slicer.vtkMRMLColorTableNode.User)
+                    colorTransferFunction = vtk.vtkDiscretizableColorTransferFunction()
+                    colorTransferFunction.AddRGBPoint(0, 1.0, 0.0, 0.0)
+                    colorTransferFunction.AddRGBPoint(1, 0.0, 1.0, 0.0)
+                    colorTransferFunction.AddRGBPoint(2, 0.0, 0.0, 1.0)
+                    colorTransferFunction.AddRGBPoint(3, 1.0, 1.0, 0.0)
+                    colorTransferFunction.AddRGBPoint(4, 0.0, 1.0, 1.0)
+                    colorTransferFunction.AddRGBPoint(5, 1.0, 0.0, 1.0)
+                    colorTransferFunction.AddRGBPoint(6, 255/255.0, 239/255.0, 213/255.0)
+                    colorTransferFunction.AddRGBPoint(7, 240/255.0, 86/255.0, 224/255.0)
+                    colorTableNode.SetAndObserveColorTransferFunction(colorTransferFunction)
+                    # Set up coloring by selection array
+                    arr = nb.load(label_file).agg_data()-1
+                    vtkarr = numpy_support.numpy_to_vtk(arr)
+                    # vtkarr.SetNumberOfComponents(1)
+                    # vtkarr.SetNumberOfTuples(arr.shape[0])
+                    # vtkarr.SetVoidArray(arr, arr.size, 0)
+                    vtkarr.SetName('HippUnfoldScalars')
+                    modelNode.AddPointScalars(vtkarr)
+                    modelNode.GetDisplayNode().SetActiveScalar("HippUnfoldScalars", vtk.vtkAssignAttribute.POINT_DATA)
+                    modelNode.GetDisplayNode().SetAndObserveColorNodeID(colorTableNode.GetID())
+                    modelNode.GetDisplayNode().SetScalarVisibility(True)
+                
     # Functions to compute files
     def bounding_box(self, seg):
         x = np.any(np.any(seg, axis=0), axis=1)
@@ -670,9 +698,6 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         vertex_df = pd.DataFrame(vertices)
         # TODO: currently custom to work with HippUnfold
         if type(vertices_colors) != type(None):
-            colors = ['red', 'green', 'blue']
-            # for idx, color in enumerate(colors):
-            #     vertex_df.insert(idx+3, color, [255 for element in range(vertex_df.shape[0])])
             vertex_df.insert(3, 'red', vertices_colors['r'].tolist())
             vertex_df.insert(4, 'green', vertices_colors['g'].tolist())
             vertex_df.insert(5, 'blue', vertices_colors['b'].tolist())
