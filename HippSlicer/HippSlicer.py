@@ -301,12 +301,11 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     input_filters = {
                         'subject':subj
                     }
-                    config_filters = copy.deepcopy(inputs_dict['pybids_inputs'][type_file]['filters'])
+                    config_filters = copy.deepcopy(inputs_dict['pybids_inputs'][type_file]['pybids_filters'])
                     #Remove regex wc
                     regex_filter = None
-                    if 'custom_regex' in config_filters:
-                        regex_filter = config_filters['custom_regex']
-                        del config_filters['custom_regex']
+                    if 'custom_regex' in inputs_dict['pybids_inputs'][type_file]:
+                        regex_filter = inputs_dict['pybids_inputs'][type_file]['custom_regex']
                     # Update filter
                     input_filters.update(config_filters)
                     # Look for files based on BIDS 
@@ -318,7 +317,13 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     # Add to list of files
                     self.files[subj] += tmp_files
                 if inputs_dict['hippunfold']:
-                    self.labels_color[subj] = layout.get(subject=subj, extension='label.gii', return_type='filename')
+                    self.labels_color[subj] = []
+                    for type_file in inputs_dict['scalars']:
+                        input_filters = {
+                            'subject':subj
+                        }
+                        input_filters.update(inputs_dict['scalars'][type_file]['pybids_filters'])
+                        self.labels_color[subj] += layout.get(**input_filters, return_type='filename')
 
     def onVisibleAllChange(self):
         """
@@ -606,9 +611,6 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
                     # Set up coloring by selection array
                     arr = nb.load(label_file).agg_data()-1
                     vtkarr = numpy_support.numpy_to_vtk(arr)
-                    # vtkarr.SetNumberOfComponents(1)
-                    # vtkarr.SetNumberOfTuples(arr.shape[0])
-                    # vtkarr.SetVoidArray(arr, arr.size, 0)
                     vtkarr.SetName('HippUnfoldScalars')
                     modelNode.AddPointScalars(vtkarr)
                     modelNode.GetDisplayNode().SetActiveScalar("HippUnfoldScalars", vtk.vtkAssignAttribute.POINT_DATA)
