@@ -27,4 +27,4 @@ scalars:
     colortable: '/home/mcespedes/Documents/code/SlicerHippunfold/HippSlicer/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'
   shapes:
     pybids_filters:
-      extenssion: '.shape.gii'
+      extension: '.shape.gii'

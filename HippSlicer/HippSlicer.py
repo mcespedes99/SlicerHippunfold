@@ -323,8 +323,11 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                             'subject':subj
                         }
                         input_filters.update(inputs_dict['scalars'][type_file]['pybids_filters'])
-                        self.labels_color[subj] += layout.get(**input_filters, return_type='filename')
-
+                        color_filenames = layout.get(**input_filters, return_type='filename')
+                        if 'colortable' in inputs_dict['scalars'][type_file]:
+                            self.labels_color[subj] +=  [(file, inputs_dict['scalars'][type_file]['colortable']) for file in color_filenames]
+                        else:
+                            self.labels_color[subj] +=  [(file, None) for file in color_filenames]
     def onVisibleAllChange(self):
         """
         Function to select all or select none
@@ -484,7 +487,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             if chk_bx.checkState() == qt.Qt.Checked:
                 files_visible.append(os.path.join(str(self.ui.HippUnfoldDirSelector.directory), self.ui.tableFiles.item(index,0).text()[2:]))
         if self.labels_color:
-            labels = self.labels_color[self.ui.subj.currentText]
+            labels = pd.DataFrame(self.labels_color[self.ui.subj.currentText])
         else:
             labels = None
         HippSlicerLogic().convertToSlicer(str(self.ui.OutputDirSelector.directory), 
@@ -519,6 +522,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         """
         # Read atlas label
         atlas_labels = pd.read_table(atlas_labels_file)
+        print(atlas_labels.head())
         atlas_labels['lut']=atlas_labels[['r','g','b']].to_numpy().tolist()
         # Create dictionary of file types
         files_dict = {}
@@ -579,46 +583,58 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
             faces = gii_data.get_arrays_from_intent('NIFTI_INTENT_TRIANGLE')[0].data
             # Extract color data
             vert_colors = None
-            if label_files:
+            self.write_ply(gii_out_fname,vertices,faces,vert_colors,'SPACE=RAS')
+            print('aqui')
+            modelNode = slicer.util.loadModel(gii_out_fname)
+            if type(label_files) != type(None):
                 ## TODO: CUSTOM TO HIPPUNFOLD FOR NOW
                 re_sub_hemi = r'/(sub-.+_hemi-[A-Z])'
                 sub_hemi = re.search(re_sub_hemi,surf).group(1)
                 # Get label file
                 r = re.compile(sub_hemi)
-                label_file = list(filter(r.search, label_files))[0]
-                vert_colors_idx = (nb.load(label_file).agg_data() -1).tolist()
-                # print(vert_colors_idx[0:10])
-                # Extract colors from df 
-                vert_colors = atlas_labels.loc[vert_colors_idx,['r','g','b']]
-                # print(vert_colors.head())
-            self.write_ply(gii_out_fname,vertices,faces,vert_colors,'SPACE=RAS')
-            if surf in files_visible:
-                modelNode = slicer.util.loadModel(gii_out_fname)
-                if type(vert_colors) != type(None):
-                    # Create color table
-                    colorTableNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLProceduralColorNode", "HippUnfoldColors")
-                    colorTableNode.SetType(slicer.vtkMRMLColorTableNode.User)
-                    colorTransferFunction = vtk.vtkDiscretizableColorTransferFunction()
-                    colorTransferFunction.AddRGBPoint(0, 1.0, 0.0, 0.0)
-                    colorTransferFunction.AddRGBPoint(1, 0.0, 1.0, 0.0)
-                    colorTransferFunction.AddRGBPoint(2, 0.0, 0.0, 1.0)
-                    colorTransferFunction.AddRGBPoint(3, 1.0, 1.0, 0.0)
-                    colorTransferFunction.AddRGBPoint(4, 0.0, 1.0, 1.0)
-                    colorTransferFunction.AddRGBPoint(5, 1.0, 0.0, 1.0)
-                    colorTransferFunction.AddRGBPoint(6, 255/255.0, 239/255.0, 213/255.0)
-                    colorTransferFunction.AddRGBPoint(7, 240/255.0, 86/255.0, 224/255.0)
-                    colorTableNode.SetAndObserveColorTransferFunction(colorTransferFunction)
-                    # Set up coloring by selection array
-                    arr = nb.load(label_file).agg_data()-1
-                    vtkarr = numpy_support.numpy_to_vtk(arr)
-                    vtkarr.SetName('HippUnfoldScalars')
-                    modelNode.AddPointScalars(vtkarr)
-                    modelNode.GetDisplayNode().SetActiveScalar("HippUnfoldScalars", vtk.vtkAssignAttribute.POINT_DATA)
-                    modelNode.GetDisplayNode().SetAndObserveColorNodeID(colorTableNode.GetID())
-                    modelNode.GetDisplayNode().SetAutoScalarRange(False)
-                    modelNode.GetDisplayNode().SetScalarRange(0.0, 7.0)
-                    modelNode.GetDisplayNode().SetScalarVisibility(True)
-                
+                label_files_hemi = label_files[label_files[0].str.contains(r)] #list(filter(r.search, label_files))[0]
+                for index in label_files_hemi.index:
+                    vert_colors_idx = nb.load(label_files_hemi.loc[index, 0]).agg_data()
+                    # print(vert_colors_idx[0:10])
+                    # Extract colors from df if exists
+                    if label_files_hemi.loc[index, 1] != None:
+                        df_colors = pd.read_table(label_files_hemi.loc[index, 1], index_col='index')
+                        vert_colors = df_colors.loc[vert_colors_idx.tolist(),['r','g','b']]
+                    # print(vert_colors.head())
+                    name_label = os.path.basename(label_files_hemi.loc[index, 0]).split('.', 1)[0].split('-')[-1]
+                    if surf in files_visible:
+                        # print(label_files_hemi.loc[index, 1])
+                        if label_files_hemi.loc[index, 1] != None:
+                            print('a')
+                            # Create color table
+                            colorTableNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLProceduralColorNode", "HippUnfoldColors")
+                            colorTableNode.SetType(slicer.vtkMRMLColorTableNode.User)
+                            colorTransferFunction = vtk.vtkDiscretizableColorTransferFunction()
+                            for index_color in df_colors.index:
+                                r = df_colors.loc[index_color, 'r']/255.0
+                                g = df_colors.loc[index_color, 'g']/255.0
+                                b = df_colors.loc[index_color, 'b']/255.0
+                                colorTransferFunction.AddRGBPoint(index_color, r, g, b)
+                            colorTableNode.SetAndObserveColorTransferFunction(colorTransferFunction)
+                            # Set up coloring by selection array
+                            vtkarr = numpy_support.numpy_to_vtk(vert_colors_idx)
+                            vtkarr.SetName(name_label)
+                            modelNode.AddPointScalars(vtkarr)
+                            modelNode.GetDisplayNode().SetActiveScalar(name_label, vtk.vtkAssignAttribute.POINT_DATA)
+                            modelNode.GetDisplayNode().SetAndObserveColorNodeID(colorTableNode.GetID())
+                            modelNode.GetDisplayNode().SetAutoScalarRange(False)
+                            indexes = df_colors.index.values.tolist()
+                            modelNode.GetDisplayNode().SetScalarRange(indexes[0], indexes[-1])
+                            modelNode.GetDisplayNode().SetScalarVisibility(True)
+                        else:
+                            print('b')
+                            vtkarr = numpy_support.numpy_to_vtk(vert_colors_idx)
+                            vtkarr.SetName(name_label)
+                            modelNode.AddPointScalars(vtkarr)
+            else:
+                if surf in files_visible:
+                    modelNode = slicer.util.loadModel(gii_out_fname)
+
     # Functions to compute files
     def bounding_box(self, seg):
         x = np.any(np.any(seg, axis=0), axis=1)
@@ -690,9 +706,6 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
                 'property float x',
                 'property float y',
                 'property float z',
-                'property uchar red',
-                'property uchar green',
-                'property uchar blue',
                 'element face %i' % number_faces,
                 'property list uchar int vertex_indices',
                 'end_header'
@@ -700,11 +713,6 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         header_df = pd.DataFrame(header)
         # make dataframe from vertices
         vertex_df = pd.DataFrame(vertices)
-        # TODO: currently custom to work with HippUnfold
-        if type(vertices_colors) != type(None):
-            vertex_df.insert(3, 'red', vertices_colors['r'].tolist())
-            vertex_df.insert(4, 'green', vertices_colors['g'].tolist())
-            vertex_df.insert(5, 'blue', vertices_colors['b'].tolist())
         # make dataframe from faces, adding first row of 3s (indicating triangles)
         triangles = np.reshape(3 * (np.ones(number_faces)), (number_faces, 1))
         triangles = triangles.astype(int)
