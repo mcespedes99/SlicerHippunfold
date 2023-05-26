@@ -11,6 +11,7 @@ set(MODULE_PYTHON_RESOURCES
   Resources/UI/${MODULE_NAME}.ui
   Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv
   Resources/Config/config.yml
+  Resources/Data/bids.json
   )
 
 #-----------------------------------------------------------------------------

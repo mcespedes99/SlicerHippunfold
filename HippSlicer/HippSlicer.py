@@ -10,7 +10,6 @@ from pathlib import Path
 import copy
 from vtk.util import numpy_support
 
-
 # Packages that might need to be installed
 try:
     from bids import BIDSLayout
@@ -238,7 +237,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 while (self.ui.tableFiles.rowCount > 0):
                     self.ui.tableFiles.removeRow(0)
                 # Load the files
-                for file in self.files[self.ui.subj.currentText]:
+                for file,_ in self.files[self.ui.subj.currentText]:
                     rowPosition = self.ui.tableFiles.rowCount
                     self.ui.tableFiles.insertRow(rowPosition)
                     # Use file path without selected parent folder
@@ -293,7 +292,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             with open(self.config) as file:
                 inputs_dict = yaml.load(file, Loader=yaml.FullLoader)
             data_path = str(self.ui.HippUnfoldDirSelector.directory)
-            layout = BIDSLayout(data_path, validate=False)
+            layout = BIDSLayout(data_path, config = self.resourcePath('Data/bids.json'), validate=False)
             self.files = {}
             for subj in self.list_subj:
                 self.files[subj] = []
@@ -301,33 +300,42 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     input_filters = {
                         'subject':subj
                     }
-                    config_filters = copy.deepcopy(inputs_dict['pybids_inputs'][type_file]['pybids_filters'])
-                    #Remove regex wc
-                    regex_filter = None
-                    if 'custom_regex' in inputs_dict['pybids_inputs'][type_file]:
-                        regex_filter = inputs_dict['pybids_inputs'][type_file]['custom_regex']
+                    dict_input = inputs_dict['pybids_inputs'][type_file]
                     # Update filter
-                    input_filters.update(config_filters)
+                    input_filters.update(dict_input['pybids_filters'])
                     # Look for files based on BIDS 
+                    image_files = layout.get(**input_filters)
                     tmp_files = layout.get(**input_filters, return_type='filename')
-                    # Filter based on regex if requested
-                    if regex_filter != None:
-                        r = re.compile(regex_filter)
-                        tmp_files = list(filter(r.match, tmp_files))
+                    # Check if there are scalars attached
+                    # print(tmp_files)
+                    if 'scalars' in dict_input:
+                        tmp_files_color = []
+                        for tmp_file, image_file in zip(tmp_files, image_files):
+                            print(tmp_file)
+                            print(image_file)
+                            labels_color = []
+                            for scalar in dict_input['scalars']:
+                                input_filters = {
+                                    'subject':subj
+                                }
+                                input_filters.update(dict_input['scalars'][scalar]['pybids_filters'])
+                                # Get entities from surf file
+                                if 'match_entities' in dict_input['scalars'][scalar]:
+                                    for entity in dict_input['scalars'][scalar]['match_entities']:
+                                        input_filters[entity] = image_file.get_entities()[entity]
+                                print(input_filters)
+                                color_filenames = layout.get(**input_filters, return_type='filename')
+                                if 'colortable' in dict_input['scalars'][scalar]:
+                                    labels_color +=  [(file, dict_input['scalars'][scalar]['colortable']) for file in color_filenames]
+                                else:
+                                    labels_color +=  [(file, None) for file in color_filenames]
+                            tmp_files_color.append((tmp_file, labels_color))
+                    else:
+                        tmp_files_color = [(tmp_file, []) for tmp_file in tmp_files]
                     # Add to list of files
-                    self.files[subj] += tmp_files
-                if inputs_dict['hippunfold']:
-                    self.labels_color[subj] = []
-                    for type_file in inputs_dict['scalars']:
-                        input_filters = {
-                            'subject':subj
-                        }
-                        input_filters.update(inputs_dict['scalars'][type_file]['pybids_filters'])
-                        color_filenames = layout.get(**input_filters, return_type='filename')
-                        if 'colortable' in inputs_dict['scalars'][type_file]:
-                            self.labels_color[subj] +=  [(file, inputs_dict['scalars'][type_file]['colortable']) for file in color_filenames]
-                        else:
-                            self.labels_color[subj] +=  [(file, None) for file in color_filenames]
+                    self.files[subj] += tmp_files_color
+                    print(subj)
+                    print(tmp_files_color)
     def onVisibleAllChange(self):
         """
         Function to select all or select none
@@ -480,18 +488,16 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         files_convert = []
         for index, chk_bx in enumerate(self.checkboxes[0]):
             if chk_bx.checkState() == qt.Qt.Checked:
-                files_convert.append(os.path.join(str(self.ui.HippUnfoldDirSelector.directory), self.ui.tableFiles.item(index,0).text()[2:]))
+                files_convert.append(self.files[self.ui.subj.currentText][index])
+        # print(files_convert)
         # Retrieve files to be visible 
         files_visible = []
         for index, chk_bx in enumerate(self.checkboxes[1]):
             if chk_bx.checkState() == qt.Qt.Checked:
-                files_visible.append(os.path.join(str(self.ui.HippUnfoldDirSelector.directory), self.ui.tableFiles.item(index,0).text()[2:]))
-        if self.labels_color:
-            labels = pd.DataFrame(self.labels_color[self.ui.subj.currentText])
-        else:
-            labels = None
+                files_visible.append(self.files[self.ui.subj.currentText][index][0])
+        # print(files_convert)
         HippSlicerLogic().convertToSlicer(str(self.ui.OutputDirSelector.directory), 
-                                           self.atlas_labels, files_convert, files_visible, labels)
+                                           self.atlas_labels, files_convert, files_visible)
 
 #########################################################################################
 ####                                                                                 ####
@@ -514,7 +520,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         if not parameterNode.GetParameter("LUT"):
             parameterNode.SetParameter("LUT", "Select LUT file")
 
-    def convertToSlicer(self, OutputPath, atlas_labels_file, files_convert, files_visible, label_files):
+    def convertToSlicer(self, OutputPath, atlas_labels_file, files_convert, files_visible):
         """
         Updates this file by changing the default _dir_chosen attribute from
         the HippSlicer and HippSlicerWidget classes so that the next time
@@ -526,23 +532,24 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         atlas_labels['lut']=atlas_labels[['r','g','b']].to_numpy().tolist()
         # Create dictionary of file types
         files_dict = {}
-        for file in files_convert:
+        for file, scalars in files_convert:
             filename = Path(file)
             ext = ''
             while filename.suffix:
                 ext = filename.suffix + ext
                 filename = filename.with_suffix('')
             if ext in files_dict:
-                files_dict[ext].append(file)
+                files_dict[ext].append((file,scalars))
             else:
-                files_dict[ext] = [file]
+                files_dict[ext] = [(file,scalars)]
         
         # For each type of file, run the corresponding function
         for extension in files_dict:
             if extension == '.surf.gii':
-                self.convert_surf(files_dict[extension], OutputPath, files_visible, label_files, atlas_labels)
+                self.convert_surf(files_dict[extension], OutputPath, files_visible, atlas_labels)
             elif extension == '.nii.gz':
-                self.convert_dseg(files_dict[extension], OutputPath, atlas_labels, files_visible)
+                files_dseg, _ = zip(*files_dict[extension])
+                self.convert_dseg(files_dseg, OutputPath, atlas_labels, files_visible)
             else:
                 print(f'File type {extension} is not supported.')   
 
@@ -558,6 +565,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
             if not os.path.exists(os.path.join(OutputPath, parent_dir)):
                 os.makedirs(os.path.join(OutputPath, parent_dir))
             seg_out_fname = os.path.join(OutputPath, parent_dir, f'{base_filename}.seg.nrrd')
+            # print(seg_out_fname)
             # Load data from dseg file
             data_obj=nb.load(dseg)
             self.write_nrrd(data_obj, seg_out_fname, atlas_labels)
@@ -565,8 +573,8 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
                 seg = slicer.util.loadSegmentation(seg_out_fname)
                 seg.CreateClosedSurfaceRepresentation()
     
-    def convert_surf(self, surf_files, OutputPath, files_visible, label_files, atlas_labels):
-        for surf in surf_files:
+    def convert_surf(self, surf_files, OutputPath, files_visible, atlas_labels):
+        for surf, label_files in surf_files:
             # Find base file name to create output
             filename_with_extension = os.path.basename(surf)
             base_filename = filename_with_extension.split('.', 1)[0]
@@ -585,26 +593,18 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
             vert_colors = None
             self.write_ply(gii_out_fname,vertices,faces,vert_colors,'SPACE=RAS')
             print('aqui')
-            modelNode = slicer.util.loadModel(gii_out_fname)
-            if type(label_files) != type(None):
-                ## TODO: CUSTOM TO HIPPUNFOLD FOR NOW
-                re_sub_hemi = r'/(sub-.+_hemi-[A-Z])'
-                sub_hemi = re.search(re_sub_hemi,surf).group(1)
-                # Get label file
-                r = re.compile(sub_hemi)
-                label_files_hemi = label_files[label_files[0].str.contains(r)] #list(filter(r.search, label_files))[0]
-                for index in label_files_hemi.index:
-                    vert_colors_idx = nb.load(label_files_hemi.loc[index, 0]).agg_data()
-                    # print(vert_colors_idx[0:10])
-                    # Extract colors from df if exists
-                    if label_files_hemi.loc[index, 1] != None:
-                        df_colors = pd.read_table(label_files_hemi.loc[index, 1], index_col='index')
-                        vert_colors = df_colors.loc[vert_colors_idx.tolist(),['r','g','b']]
-                    # print(vert_colors.head())
-                    name_label = os.path.basename(label_files_hemi.loc[index, 0]).split('.', 1)[0].split('-')[-1]
-                    if surf in files_visible:
-                        # print(label_files_hemi.loc[index, 1])
-                        if label_files_hemi.loc[index, 1] != None:
+            if surf in files_visible:
+                modelNode = slicer.util.loadModel(gii_out_fname)
+                if len(label_files)>0:
+                    colormap = False # Condition to give preference to show any color map that has an associated color table
+                    label_files_df = pd.DataFrame(label_files)
+                    for index in label_files_df.index:
+                        vert_colors_idx = nb.load(label_files_df.loc[index, 0]).agg_data()
+                        name_label = os.path.basename(label_files_df.loc[index, 0]).split('.', 1)[0].split('-')[-1]
+                        # print(vert_colors_idx[0:10])
+                        # Extract colors from df if exists
+                        if label_files_df.loc[index, 1] != None:
+                            df_colors = pd.read_table(label_files_df.loc[index, 1], index_col='index')
                             print('a')
                             # Create color table
                             colorTableNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLProceduralColorNode", "HippUnfoldColors")
@@ -626,14 +626,17 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
                             indexes = df_colors.index.values.tolist()
                             modelNode.GetDisplayNode().SetScalarRange(indexes[0], indexes[-1])
                             modelNode.GetDisplayNode().SetScalarVisibility(True)
+                            colormap = True
                         else:
                             print('b')
                             vtkarr = numpy_support.numpy_to_vtk(vert_colors_idx)
                             vtkarr.SetName(name_label)
                             modelNode.AddPointScalars(vtkarr)
-            else:
-                if surf in files_visible:
-                    modelNode = slicer.util.loadModel(gii_out_fname)
+                            # Giving preference to show any color map that has an associated color table
+                            if index == label_files_df.index.values.tolist()[-1] and not colormap:
+                                modelNode.GetDisplayNode().SetActiveScalar(name_label, vtk.vtkAssignAttribute.POINT_DATA)
+                                modelNode.GetDisplayNode().SetAutoScalarRange(True)
+                                modelNode.GetDisplayNode().SetScalarVisibility(True)
 
     # Functions to compute files
     def bounding_box(self, seg):

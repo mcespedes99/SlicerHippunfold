@@ -3,11 +3,40 @@ hippunfold: True
 
 pybids_inputs:
   # Hippunfold
-  surf:
+  hipp_surf:
+    # Filters to look for surf files
     pybids_filters:
       extension: '.surf.gii'
+      space: 'T1w'
       suffix: ['inner','midthickness','outer']
-    custom_regex: "^.+_space-T1w_den-0p5mm_label-hipp_.+.surf.gii$"
+    # Scalars to attach to the surf
+    scalars:
+      labels:
+        pybids_filters:
+          extension: '.label.gii'
+        match_entities: ['label', 'hemi']
+        colortable: '/home/mcespedes/Documents/code/SlicerHippunfold/HippSlicer/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'
+      shapes:
+        pybids_filters:
+          extension: '.shape.gii'
+        match_entities: ['label', 'hemi']
+  dentate_surf:
+    # Filters to look for surf files
+    pybids_filters:
+      extension: '.surf.gii'
+      space: 'T1w'
+      suffix: ['inner','midthickness','outer']
+    # Scalars to attach to the surf
+    scalars:
+      labels:
+        pybids_filters:
+          extension: '.label.gii'
+        match_entities: ['label', 'hemi']
+        colortable: '/home/mcespedes/Documents/code/SlicerHippunfold/HippSlicer/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'
+      shapes:
+        pybids_filters:
+          extension: '.shape.gii'
+        match_entities: ['label', 'hemi']
   dseg:
     pybids_filters:
       extension: '.nii.gz'
