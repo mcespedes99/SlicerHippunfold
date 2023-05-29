@@ -2,7 +2,7 @@
 hippunfold: True
 
 pybids_inputs:
-  # Hippunfold
+  # Hippunfold hippocampus surfaces
   hipp_surf:
     # Filters to look for surf files
     pybids_filters:
@@ -20,6 +20,7 @@ pybids_inputs:
         pybids_filters:
           extension: '.shape.gii'
         match_entities: ['label', 'hemi']
+  # Hippunfold dentate surfaces
   dentate_surf:
     # Filters to look for surf files
     pybids_filters:
@@ -47,13 +48,3 @@ pybids_inputs:
     pybids_filters:
       extension: '.surf.gii'
       datatype: 'anat'
-
-scalars:
-  # Hippunfold
-  labels:
-    pybids_filters:
-      extension: '.label.gii'
-    colortable: '/home/mcespedes/Documents/code/SlicerHippunfold/HippSlicer/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'
-  shapes:
-    pybids_filters:
-      extension: '.shape.gii'

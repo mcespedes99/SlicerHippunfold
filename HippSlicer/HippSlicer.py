@@ -311,8 +311,6 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     if 'scalars' in dict_input:
                         tmp_files_color = []
                         for tmp_file, image_file in zip(tmp_files, image_files):
-                            print(tmp_file)
-                            print(image_file)
                             labels_color = []
                             for scalar in dict_input['scalars']:
                                 input_filters = {
@@ -323,7 +321,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                                 if 'match_entities' in dict_input['scalars'][scalar]:
                                     for entity in dict_input['scalars'][scalar]['match_entities']:
                                         input_filters[entity] = image_file.get_entities()[entity]
-                                print(input_filters)
+                                # print(input_filters)
                                 color_filenames = layout.get(**input_filters, return_type='filename')
                                 if 'colortable' in dict_input['scalars'][scalar]:
                                     labels_color +=  [(file, dict_input['scalars'][scalar]['colortable']) for file in color_filenames]
@@ -334,8 +332,6 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         tmp_files_color = [(tmp_file, []) for tmp_file in tmp_files]
                     # Add to list of files
                     self.files[subj] += tmp_files_color
-                    print(subj)
-                    print(tmp_files_color)
     def onVisibleAllChange(self):
         """
         Function to select all or select none
@@ -546,7 +542,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         # For each type of file, run the corresponding function
         for extension in files_dict:
             if extension == '.surf.gii':
-                self.convert_surf(files_dict[extension], OutputPath, files_visible, atlas_labels)
+                self.convert_surf(files_dict[extension], OutputPath, files_visible)
             elif extension == '.nii.gz':
                 files_dseg, _ = zip(*files_dict[extension])
                 self.convert_dseg(files_dseg, OutputPath, atlas_labels, files_visible)
@@ -573,7 +569,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
                 seg = slicer.util.loadSegmentation(seg_out_fname)
                 seg.CreateClosedSurfaceRepresentation()
     
-    def convert_surf(self, surf_files, OutputPath, files_visible, atlas_labels):
+    def convert_surf(self, surf_files, OutputPath, files_visible):
         for surf, label_files in surf_files:
             # Find base file name to create output
             filename_with_extension = os.path.basename(surf)
@@ -584,59 +580,83 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
             # Create surf folder if it doesn't exist
             if not os.path.exists(os.path.join(OutputPath, parent_dir)):
                 os.makedirs(os.path.join(OutputPath, parent_dir))
-            gii_out_fname = os.path.join(OutputPath, parent_dir, f'{base_filename}.ply')
+            plyFilePath = os.path.join(OutputPath, parent_dir, f'{base_filename}.ply')
             # Extract geometric data
             gii_data = nb.load(surf)
             vertices = gii_data.get_arrays_from_intent('NIFTI_INTENT_POINTSET')[0].data
             faces = gii_data.get_arrays_from_intent('NIFTI_INTENT_TRIANGLE')[0].data
+            # Write PLY only with geometric info
+
             # Extract color data
-            vert_colors = None
-            self.write_ply(gii_out_fname,vertices,faces,vert_colors,'SPACE=RAS')
+            surf_pv = self.makePolyData(vertices, faces)
             print('aqui')
-            if surf in files_visible:
-                modelNode = slicer.util.loadModel(gii_out_fname)
-                if len(label_files)>0:
-                    colormap = False # Condition to give preference to show any color map that has an associated color table
-                    label_files_df = pd.DataFrame(label_files)
-                    for index in label_files_df.index:
-                        vert_colors_idx = nb.load(label_files_df.loc[index, 0]).agg_data()
-                        name_label = os.path.basename(label_files_df.loc[index, 0]).split('.', 1)[0].split('-')[-1]
-                        # print(vert_colors_idx[0:10])
-                        # Extract colors from df if exists
-                        if label_files_df.loc[index, 1] != None:
-                            df_colors = pd.read_table(label_files_df.loc[index, 1], index_col='index')
-                            print('a')
-                            # Create color table
-                            colorTableNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLProceduralColorNode", "HippUnfoldColors")
-                            colorTableNode.SetType(slicer.vtkMRMLColorTableNode.User)
-                            colorTransferFunction = vtk.vtkDiscretizableColorTransferFunction()
-                            for index_color in df_colors.index:
-                                r = df_colors.loc[index_color, 'r']/255.0
-                                g = df_colors.loc[index_color, 'g']/255.0
-                                b = df_colors.loc[index_color, 'b']/255.0
-                                colorTransferFunction.AddRGBPoint(index_color, r, g, b)
-                            colorTableNode.SetAndObserveColorTransferFunction(colorTransferFunction)
-                            # Set up coloring by selection array
-                            vtkarr = numpy_support.numpy_to_vtk(vert_colors_idx)
-                            vtkarr.SetName(name_label)
-                            modelNode.AddPointScalars(vtkarr)
+            # Create model
+            modelNode = slicer.modules.models.logic().AddModel(surf_pv)
+            # Set name
+            modelNode.SetName(base_filename)
+            # Add scalars
+            if len(label_files)>0:
+                colormap = False # Condition to give preference to show any color map that has an associated color table
+                label_files_df = pd.DataFrame(label_files)
+                for index in label_files_df.index:
+                    vert_colors_idx = nb.load(label_files_df.loc[index, 0]).agg_data()
+                    name_label = os.path.basename(label_files_df.loc[index, 0]).split('.', 1)[0].split('-')[-1]
+                    # print(vert_colors_idx[0:10])
+                    # Extract colors from df if exists
+                    if label_files_df.loc[index, 1] != None:
+                        df_colors = pd.read_table(label_files_df.loc[index, 1], index_col='index')
+                        print('a')
+                        # Create color table
+                        colorTableNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLProceduralColorNode", "HippUnfoldColors")
+                        colorTableNode.SetType(slicer.vtkMRMLColorTableNode.User)
+                        colorTransferFunction = vtk.vtkDiscretizableColorTransferFunction()
+                        for index_color in df_colors.index:
+                            r = df_colors.loc[index_color, 'r']/255.0
+                            g = df_colors.loc[index_color, 'g']/255.0
+                            b = df_colors.loc[index_color, 'b']/255.0
+                            colorTransferFunction.AddRGBPoint(index_color, r, g, b)
+                        colorTableNode.SetAndObserveColorTransferFunction(colorTransferFunction)
+                        # Set up coloring by selection array
+                        vtkarr = numpy_support.numpy_to_vtk(vert_colors_idx)
+                        vtkarr.SetName(name_label)
+                        modelNode.AddPointScalars(vtkarr)
+                        modelNode.GetDisplayNode().SetActiveScalar(name_label, vtk.vtkAssignAttribute.POINT_DATA)
+                        modelNode.GetDisplayNode().SetAndObserveColorNodeID(colorTableNode.GetID())
+                        modelNode.GetDisplayNode().SetAutoScalarRange(False)
+                        indexes = df_colors.index.values.tolist()
+                        modelNode.GetDisplayNode().SetScalarRange(indexes[0], indexes[-1])
+                        modelNode.GetDisplayNode().SetScalarVisibility(True)
+                        colormap = True
+                    else:
+                        print('b')
+                        vtkarr = numpy_support.numpy_to_vtk(vert_colors_idx)
+                        vtkarr.SetName(name_label)
+                        modelNode.AddPointScalars(vtkarr)
+                        # Giving preference to show any color map that has an associated color table
+                        if index == label_files_df.index.values.tolist()[-1] and not colormap:
                             modelNode.GetDisplayNode().SetActiveScalar(name_label, vtk.vtkAssignAttribute.POINT_DATA)
-                            modelNode.GetDisplayNode().SetAndObserveColorNodeID(colorTableNode.GetID())
-                            modelNode.GetDisplayNode().SetAutoScalarRange(False)
-                            indexes = df_colors.index.values.tolist()
-                            modelNode.GetDisplayNode().SetScalarRange(indexes[0], indexes[-1])
+                            modelNode.GetDisplayNode().SetAutoScalarRange(True)
                             modelNode.GetDisplayNode().SetScalarVisibility(True)
-                            colormap = True
-                        else:
-                            print('b')
-                            vtkarr = numpy_support.numpy_to_vtk(vert_colors_idx)
-                            vtkarr.SetName(name_label)
-                            modelNode.AddPointScalars(vtkarr)
-                            # Giving preference to show any color map that has an associated color table
-                            if index == label_files_df.index.values.tolist()[-1] and not colormap:
-                                modelNode.GetDisplayNode().SetActiveScalar(name_label, vtk.vtkAssignAttribute.POINT_DATA)
-                                modelNode.GetDisplayNode().SetAutoScalarRange(True)
-                                modelNode.GetDisplayNode().SetScalarVisibility(True)
+                # Set visibility 
+                if surf in files_visible:
+                    modelNode.SetDisplayVisibility(True)
+                else:
+                    modelNode.SetDisplayVisibility(False)
+                # Export
+                modelDisplayNode = modelNode.GetDisplayNode()
+                triangles = vtk.vtkTriangleFilter()
+                triangles.SetInputConnection(modelDisplayNode.GetOutputPolyDataConnection())
+
+                plyWriter = vtk.vtkPLYWriter()
+                plyWriter.SetInputConnection(triangles.GetOutputPort())
+                lut = vtk.vtkLookupTable()
+                lut.DeepCopy(modelDisplayNode.GetColorNode().GetLookupTable())
+                lut.SetRange(modelDisplayNode.GetScalarRange())
+                plyWriter.SetLookupTable(lut)
+                plyWriter.SetArrayName(modelDisplayNode.GetActiveScalarName())
+
+                plyWriter.SetFileName(plyFilePath)
+                plyWriter.Write()
 
     # Functions to compute files
     def bounding_box(self, seg):
@@ -697,7 +717,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         
         nrrd.write(out_file, seg_cut, keyvaluepairs)
 
-    def write_ply(self, filename, vertices, faces, vertices_colors, comment=None):
+    def write_ply(self, filename, vertices, faces, comment=None):
         # infer number of vertices and faces
         number_vertices = vertices.shape[0]
         number_faces = faces.shape[0]
@@ -729,6 +749,35 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
         with open(filename, 'a') as f:
             faces_df.to_csv(f, header=False, index=False,
                             float_format='%.0f', sep=' ')
+    
+    # Function to create vtkPolyData object
+    def makePolyData(self, verts, faces, labelsScalars, arrayScalars):
+        # https://github.com/stephan1312/SlicerEAMapReader/blob/2798100fe2aebf482a83b347c1cef18135f2df87/EAMapReader-Slicer-4.11/lib/Slicer-4.11/qt-scripted-modules/EAMapReader.py#L218-L290
+        # https://programtalk.com/python-examples/vtk.vtkPolyData/
+        mesh = vtk.vtkPolyData()
+        pts = vtk.vtkPoints()
+        for pt in verts:
+            pts.InsertNextPoint( pt[0], pt[1], pt[2] )
+        cells = vtk.vtkCellArray()
+        for f in faces:
+            cells.InsertNextCell( len(f) )
+            for v in f: 
+                cells.InsertCellPoint( v )
+        mesh.SetPoints(pts)
+        mesh.SetPolys(cells)
+
+        # Add scalars
+        scalars = []
+        for j in range(len(labelsScalars)):
+            scalars.append(vtk.vtkFloatArray())
+            scalars[j].SetNumberOfComponents(1)
+            scalars[j].SetNumberOfTuples(len(arrayScalars))
+            for i in range(len(arrayScalars)):
+                scalars[j].SetTuple1(i,arrayScalars[i][j])
+            scalars[j].SetName(labelsScalars[j])
+            mesh.GetPointData().AddArray(scalars[j])
+
+        return mesh
         
 
 
