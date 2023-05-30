@@ -580,23 +580,19 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
             # Create surf folder if it doesn't exist
             if not os.path.exists(os.path.join(OutputPath, parent_dir)):
                 os.makedirs(os.path.join(OutputPath, parent_dir))
-            plyFilePath = os.path.join(OutputPath, parent_dir, f'{base_filename}.ply')
+            outFilePath = os.path.join(OutputPath, parent_dir, f'{base_filename}.vtk')
             # Extract geometric data
             gii_data = nb.load(surf)
             vertices = gii_data.get_arrays_from_intent('NIFTI_INTENT_POINTSET')[0].data
             faces = gii_data.get_arrays_from_intent('NIFTI_INTENT_TRIANGLE')[0].data
-            # Write PLY only with geometric info
-
             # Extract color data
-            surf_pv = self.makePolyData(vertices, faces)
             print('aqui')
-            # Create model
-            modelNode = slicer.modules.models.logic().AddModel(surf_pv)
-            # Set name
-            modelNode.SetName(base_filename)
             # Add scalars
             if len(label_files)>0:
-                colormap = False # Condition to give preference to show any color map that has an associated color table
+                active_scalar = None
+                scalar_range = []
+                arrayScalars = []
+                labelsScalars = []
                 label_files_df = pd.DataFrame(label_files)
                 for index in label_files_df.index:
                     vert_colors_idx = nb.load(label_files_df.loc[index, 0]).agg_data()
@@ -616,47 +612,55 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
                             b = df_colors.loc[index_color, 'b']/255.0
                             colorTransferFunction.AddRGBPoint(index_color, r, g, b)
                         colorTableNode.SetAndObserveColorTransferFunction(colorTransferFunction)
-                        # Set up coloring by selection array
-                        vtkarr = numpy_support.numpy_to_vtk(vert_colors_idx)
-                        vtkarr.SetName(name_label)
-                        modelNode.AddPointScalars(vtkarr)
-                        modelNode.GetDisplayNode().SetActiveScalar(name_label, vtk.vtkAssignAttribute.POINT_DATA)
-                        modelNode.GetDisplayNode().SetAndObserveColorNodeID(colorTableNode.GetID())
-                        modelNode.GetDisplayNode().SetAutoScalarRange(False)
+                        # Test 
+                        if len(arrayScalars) == 0:
+                            arrayScalars = [tuple([scalar]) for scalar in vert_colors_idx]
+                        else:
+                            for idx in range(len(vert_colors_idx)):
+                                arrayScalars[idx] += tuple([vert_colors_idx[idx]])
+                        # Name 
+                        labelsScalars.append(name_label)
+                        active_scalar = name_label
                         indexes = df_colors.index.values.tolist()
-                        modelNode.GetDisplayNode().SetScalarRange(indexes[0], indexes[-1])
-                        modelNode.GetDisplayNode().SetScalarVisibility(True)
-                        colormap = True
+                        scalar_range = (indexes[0], indexes[-1])
                     else:
                         print('b')
-                        vtkarr = numpy_support.numpy_to_vtk(vert_colors_idx)
-                        vtkarr.SetName(name_label)
-                        modelNode.AddPointScalars(vtkarr)
-                        # Giving preference to show any color map that has an associated color table
-                        if index == label_files_df.index.values.tolist()[-1] and not colormap:
-                            modelNode.GetDisplayNode().SetActiveScalar(name_label, vtk.vtkAssignAttribute.POINT_DATA)
-                            modelNode.GetDisplayNode().SetAutoScalarRange(True)
-                            modelNode.GetDisplayNode().SetScalarVisibility(True)
-                # Set visibility 
-                if surf in files_visible:
-                    modelNode.SetDisplayVisibility(True)
-                else:
-                    modelNode.SetDisplayVisibility(False)
-                # Export
-                modelDisplayNode = modelNode.GetDisplayNode()
-                triangles = vtk.vtkTriangleFilter()
-                triangles.SetInputConnection(modelDisplayNode.GetOutputPolyDataConnection())
-
-                plyWriter = vtk.vtkPLYWriter()
-                plyWriter.SetInputConnection(triangles.GetOutputPort())
-                lut = vtk.vtkLookupTable()
-                lut.DeepCopy(modelDisplayNode.GetColorNode().GetLookupTable())
-                lut.SetRange(modelDisplayNode.GetScalarRange())
-                plyWriter.SetLookupTable(lut)
-                plyWriter.SetArrayName(modelDisplayNode.GetActiveScalarName())
-
-                plyWriter.SetFileName(plyFilePath)
-                plyWriter.Write()
+                        # Test 
+                        if len(arrayScalars) == 0:
+                            arrayScalars = [tuple([scalar]) for scalar in vert_colors_idx]
+                        else:
+                            for idx in range(len(vert_colors_idx)):
+                                arrayScalars[idx] += tuple([vert_colors_idx[idx]])
+                        # Name 
+                        labelsScalars.append(name_label)
+                        if active_scalar == None and index == list(label_files_df.index)[-1]:
+                            active_scalar = name_label
+            # Create model
+            surf_pv = self.makePolyData(vertices, faces, labelsScalars, arrayScalars)
+            modelNode = slicer.modules.models.logic().AddModel(surf_pv)
+            # Set name
+            modelNode.SetName(base_filename)
+            # Set active scalar
+            if len(scalar_range) > 0 and active_scalar != None:
+                modelNode.GetDisplayNode().SetActiveScalar(active_scalar, vtk.vtkAssignAttribute.POINT_DATA)
+                modelNode.GetDisplayNode().SetAndObserveColorNodeID(colorTableNode.GetID())
+                modelNode.GetDisplayNode().SetAutoScalarRange(False)
+                modelNode.GetDisplayNode().SetScalarRange(scalar_range[0], scalar_range[1])
+                modelNode.GetDisplayNode().SetScalarVisibility(True)
+            elif active_scalar != None:
+                modelNode.GetDisplayNode().SetActiveScalar(active_scalar, vtk.vtkAssignAttribute.POINT_DATA)
+                modelNode.GetDisplayNode().SetAutoScalarRange(True)
+                modelNode.GetDisplayNode().SetScalarVisibility(True)
+            # Set visibility 
+            if surf in files_visible:
+                modelNode.SetDisplayVisibility(True)
+            else:
+                modelNode.SetDisplayVisibility(False)
+            # Export
+            writer = vtk.vtkPolyDataWriter()
+            writer.SetInputData(surf_pv)
+            writer.SetFileName(outFilePath)
+            writer.Write()
 
     # Functions to compute files
     def bounding_box(self, seg):
