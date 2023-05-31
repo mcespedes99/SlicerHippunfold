@@ -19,9 +19,11 @@ except:
         
 try:
     import nibabel as nb
+    from nibabel.affines import apply_affine
 except:
     os.system('PythonSlicer -m pip install nibabel')
     import nibabel as nb
+    from nibabel.affines import apply_affine
 
 try:
     import nrrd
@@ -656,7 +658,12 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
                 modelNode.SetDisplayVisibility(True)
             else:
                 modelNode.SetDisplayVisibility(False)
-            # Export
+            # Export model (needs to be recomputed as the vertices needs to be rotated)
+            # Transform vertices
+            LPS_to_RAS = np.array([[-1, 0, 0, 0],[0, -1, 0, 0],[0, 0, 1, 0],[0, 0, 0, 1]])
+            vertices = apply_affine(LPS_to_RAS, vertices)
+            # Recompute surface and write
+            surf_pv = self.makePolyData(vertices, faces, labelsScalars, arrayScalars)
             writer = vtk.vtkPolyDataWriter()
             writer.SetInputData(surf_pv)
             writer.SetFileName(outFilePath)
