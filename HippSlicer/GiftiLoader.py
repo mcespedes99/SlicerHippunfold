@@ -5,11 +5,7 @@ from slicer.ScriptedLoadableModule import *
 from slicer.util import VTKObservationMixin
 import numpy as np
 import re
-from qt import QStandardItem
 from pathlib import Path
-import copy
-from vtk.util import numpy_support
-
 # Packages that might need to be installed
 try:
     from bids import BIDSLayout
@@ -44,36 +40,35 @@ except:
     import yaml
 
 #
-# HippSlicer. Module to connect 3D Slicer with vCastSender application.
+# GiftiLoader. Module to connect 3D Slicer with vCastSender application.
 #
 
-class HippSlicer(ScriptedLoadableModule):
+class GiftiLoader(ScriptedLoadableModule):
     """Uses ScriptedLoadableModule base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
 
     def __init__(self, parent):
         ScriptedLoadableModule.__init__(self, parent)
-        self.parent.title = "HippSlicer"
-        self.parent.categories = ["Segmentation"]
+        self.parent.title = "GiftiLoader"
+        self.parent.categories = ["Surface Models"]
         self._dir_chosen = "" # Saves path to vCast exe file
         self.parent.dependencies = []
-        self.parent.contributors = ["Mauricio Cespedes Tenorio (Western University)"]
+        self.parent.contributors = ["Mauricio Cespedes (Western University)"]
         self.parent.helpText = """
-        This tool is made to connect vCastSender application with 3D Slicer.
+        This tool is made to load surfaces (gifti) and volumetric (nifti) files into 3D Slicer.
         """
         self.parent.acknowledgementText = """
-        This module was originally developed by Mauricio Cespedes Tenorio (Western University) as part
-        of the extension Multiviews.
-        """ # <a href="https://github.com/mnarizzano/SEEGA">Multiviews</a>
+        This module was originally developed by Mauricio Cespedes Tenorio (Western University).
+        """ 
     
 
 
 #
-# HippSlicer Widget
+# GiftiLoader Widget
 #
 
-class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
+class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     """Uses ScriptedLoadableModuleWidget base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
@@ -93,7 +88,6 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Condition to set apply botton to true based on files selection
         self.files_selected = False
         self.checkboxes = [[],[]] # convert and visible
-        self.labels_color = {}
 
     def setup(self):
         """
@@ -102,7 +96,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         ScriptedLoadableModuleWidget.setup(self)
 
         self._loadUI()
-        self.logic = HippSlicerLogic()
+        self.logic = GiftiLoaderLogic()
 
         # Connections
         self._setupConnections()
@@ -112,7 +106,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         Load widget from .ui file (created by Qt Designer).
         """
         # Additional widgets can be instantiated manually and added to self.layout.
-        uiWidget = slicer.util.loadUI(self.resourcePath('UI/HippSlicer.ui'))
+        uiWidget = slicer.util.loadUI(self.resourcePath('UI/GiftiLoader.ui'))
         self.layout.addWidget(uiWidget)
         self.ui = slicer.util.childWidgetVariables(uiWidget)
         # UI boot configuration of 'Apply' button and the input box. 
@@ -129,10 +123,6 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.subj.addItems(['Select subject'])
 
         self.ui.configFileSelector.setCurrentPath(self.config)
-
-        # Combo boxes
-        # print(self.ui.VisibleAll.currentText)
-        # self.ui.VisibleAll.setCurrentText('---')
         
 
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
@@ -150,12 +140,10 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
         # (in the selected parameter node).
         self.ui.HippUnfoldDirSelector.connect("directoryChanged(QString)", self.onDirectoryChange)
-        self.ui.OutputDirSelector.connect("directoryChanged(QString)", self.onDirectoryChange)
         self.ui.subj.connect('currentIndexChanged(int)', self.onSubjChange)
         self.ui.configFileSelector.connect("currentPathChanged(QString)", self.onConfigChange)
         self.ui.VisibleAll.connect('checkedIndexesChanged()', self.onVisibleAllChange)
         self.ui.ConvertAll.connect('checkedIndexesChanged()', self.onConvertAllChange)
-        # print('ca')
         # Buttons
         self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
 
@@ -379,11 +367,10 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         Function to enable/disable 'Apply' button depending on the selected file
         """
         _tmp_dir_input = str(self.ui.HippUnfoldDirSelector.directory) 
-        _tmp_dir_output = str(self.ui.OutputDirSelector.directory) 
 
         # Bool to change button status
         # If the selected file is a valid one, the button is enabled.   
-        if (os.path.exists(_tmp_dir_input) and os.path.exists(_tmp_dir_output)):
+        if (os.path.exists(_tmp_dir_input)):
             try:
                 # Update dropdown
                 data_path = _tmp_dir_input
@@ -407,7 +394,7 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.applyButton.toolTip = "Please select a valid directory"
             self.ui.applyButton.enabled = False
             self._dir_selected = False
-        
+
     def chkBoxVisibleChange(self):
         # Look for amount of items checked
         if len(self.checkboxes[0]) == len(self.checkboxes[1]):
@@ -494,15 +481,15 @@ class HippSlicerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             if chk_bx.checkState() == qt.Qt.Checked:
                 files_visible.append(self.files[self.ui.subj.currentText][index][0])
         # print(files_convert)
-        HippSlicerLogic().convertToSlicer(str(self.ui.OutputDirSelector.directory), 
+        GiftiLoaderLogic().convertToSlicer(str(self.ui.OutputDirSelector.directory), 
                                            self.atlas_labels, files_convert, files_visible)
 
 #########################################################################################
 ####                                                                                 ####
-#### HippSlicerLogic                                                          ####
+#### GiftiLoaderLogic                                                          ####
 ####                                                                                 ####
 #########################################################################################
-class HippSlicerLogic(ScriptedLoadableModuleLogic):
+class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
     """
   """
 
@@ -521,7 +508,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
     def convertToSlicer(self, OutputPath, atlas_labels_file, files_convert, files_visible):
         """
         Updates this file by changing the default _dir_chosen attribute from
-        the HippSlicer and HippSlicerWidget classes so that the next time
+        the GiftiLoader and GiftiLoaderWidget classes so that the next time
         3D Slicer is launched, the directory to vCastSender.exe is saved.
         """
         # Read atlas label
@@ -793,7 +780,7 @@ class HippSlicerLogic(ScriptedLoadableModuleLogic):
 
 
 
-class HippSlicerTest(ScriptedLoadableModuleTest):
+class GiftiLoaderTest(ScriptedLoadableModuleTest):
   """
   This is the test case for your scripted module.
   Uses ScriptedLoadableModuleTest base class, available at:
@@ -809,9 +796,9 @@ class HippSlicerTest(ScriptedLoadableModuleTest):
     """Run as few or as many tests as needed here.
     """
     self.setUp()
-    self.test_HippSlicer1()
+    self.test_GiftiLoader1()
 
-  def test_HippSlicer1(self):
+  def test_GiftiLoader1(self):
     """ Ideally you should have several levels of tests.  At the lowest level
     tests should exercise the functionality of the logic with different inputs
     (both valid and invalid).  At higher levels your tests should emulate the
