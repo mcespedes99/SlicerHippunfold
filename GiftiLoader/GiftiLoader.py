@@ -298,6 +298,7 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     tmp_files = layout.get(**input_filters, return_type='filename')
                     # Check if there are scalars attached
                     # print(tmp_files)
+                    # Case 1: gifti with scalars 
                     if 'scalars' in dict_input:
                         tmp_files_color = []
                         for tmp_file, image_file in zip(tmp_files, image_files):
@@ -318,6 +319,13 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                                 else:
                                     labels_color +=  [(file, None) for file in color_filenames]
                             tmp_files_color.append((tmp_file, labels_color))
+                    # Case 2: Nifti with colortable
+                    elif 'colortable' in dict_input: 
+                        if 'show_unknown' in dict_input:
+                            tmp_files_color = [(tmp_file, (dict_input['colortable'], dict_input['show_unknown'])) for tmp_file in tmp_files]
+                        else: # default to false
+                            tmp_files_color = [(tmp_file, (dict_input['colortable'], False)) for tmp_file in tmp_files]
+                    # Case 3: Gifti without scalars
                     else:
                         tmp_files_color = [(tmp_file, []) for tmp_file in tmp_files]
                     # Add to list of files
@@ -513,7 +521,7 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
         """
         # Read atlas label
         atlas_labels = pd.read_table(atlas_labels_file)
-        print(atlas_labels.head())
+        # print(atlas_labels.head())
         atlas_labels['lut']=atlas_labels[['r','g','b']].to_numpy().tolist()
         # Create dictionary of file types
         files_dict = {}
@@ -533,13 +541,15 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
             if extension == '.surf.gii':
                 self.convert_surf(files_dict[extension], OutputPath, files_visible)
             elif extension == '.nii.gz':
-                files_dseg, _ = zip(*files_dict[extension])
-                self.convert_dseg(files_dseg, OutputPath, atlas_labels, files_visible)
+                self.convert_dseg(files_dict[extension], OutputPath, files_visible)
             else:
                 print(f'File type {extension} is not supported.')   
 
-    def convert_dseg(self, dseg_files, OutputPath, atlas_labels, files_visible):
-        for dseg in dseg_files:
+    def convert_dseg(self, dseg_files, OutputPath, files_visible):
+        for dseg, (colortable, show_unknown) in dseg_files:
+            # Read colortable
+            atlas_labels = pd.read_table(colortable)
+            atlas_labels['lut']=atlas_labels[['r','g','b']].to_numpy().tolist()
             # Find base file name to create output
             filename_with_extension = os.path.basename(dseg)
             base_filename = filename_with_extension.split('.', 1)[0]
@@ -553,9 +563,9 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
             # print(seg_out_fname)
             # Load data from dseg file
             data_obj=nb.load(dseg)
-            self.write_nrrd(data_obj, seg_out_fname, atlas_labels)
+            self.write_nrrd(data_obj, seg_out_fname, atlas_labels, show_unknown)
+            seg = slicer.util.loadSegmentation(seg_out_fname)
             if dseg in files_visible:
-                seg = slicer.util.loadSegmentation(seg_out_fname)
                 seg.CreateClosedSurfaceRepresentation()
     
     def convert_surf(self, surf_files, OutputPath, files_visible):
@@ -577,11 +587,11 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
             # Extract color data
             print('aqui')
             # Add scalars
+            arrayScalars = []
+            labelsScalars = []
+            active_scalar = None
+            scalar_range = []
             if len(label_files)>0:
-                active_scalar = None
-                scalar_range = []
-                arrayScalars = []
-                labelsScalars = []
                 label_files_df = pd.DataFrame(label_files)
                 for index in label_files_df.index:
                     vert_colors_idx = nb.load(label_files_df.loc[index, 0]).agg_data()
@@ -674,9 +684,11 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
         origin = [ymin, xmin, zmin]
         return shape, origin
 
-    def write_nrrd(self, data_obj, out_file, atlas_labels):
+    def write_nrrd(self, data_obj, out_file, atlas_labels, show_unknown):
         
         data=data_obj.get_fdata()
+        print(np.unique(data))
+        print(atlas_labels)
         
         keyvaluepairs = {}
         keyvaluepairs['dimension'] = 3
@@ -693,60 +705,35 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
 
         keyvaluepairs['sizes'] = np.array([*shape])
         keyvaluepairs['space origin'] = origin[0]
-        
-        for i in range(int(np.max(data))):
-            col_lut=np.array(atlas_labels[atlas_labels['index']==i+1]['lut'].values[0]+[255])/255
-            name = 'Segment{}'.format(i)
-            keyvaluepairs[name + '_Color'] = ' '.join([f"{a:10.3f}" for a in col_lut])
-            keyvaluepairs[name + '_ColorAutoGenerated'] = '1'
-            keyvaluepairs[name + '_Extent'] = f'0 {shape[0]-1} 0 {shape[1]-1} 0 {shape[2]-1}'
-            keyvaluepairs[name + '_ID'] = 'Segment_{}'.format(i+1)
-            keyvaluepairs[name + '_LabelValue'] = '{}'.format(i+1)
-            keyvaluepairs[name + '_Layer'] = '0'
-            keyvaluepairs[name + '_Name'] = atlas_labels[atlas_labels['index']==i+1]['abbreviation'].values[0]
-            keyvaluepairs[name + '_NameAutoGenerated'] = 1
-            keyvaluepairs[name + '_Tags'] = 'TerminologyEntry:Segmentation category' +\
-                ' and type - 3D Slicer General Anatomy list~SRT^T-D0050^Tissue~SRT^' +\
-                'T-D0050^Tissue~^^~Anatomic codes - DICOM master list~^^~^^|'
-
+        i = 0 # Count segments
+        for id in range(int(np.min(data)),int(np.max(data))+1):
+            print(show_unknown)
+            print(type(show_unknown))
+            if id in atlas_labels['index'].tolist() or show_unknown:
+                name = 'Segment{}'.format(i)
+                if id in atlas_labels['index'].tolist():
+                    col_lut=np.array(atlas_labels[atlas_labels['index']==id]['lut'].values[0]+[255])/255
+                    keyvaluepairs[name + '_Name'] = atlas_labels[atlas_labels['index']==id]['abbreviation'].values[0]
+                    keyvaluepairs[name + '_Color'] = ' '.join([f"{a:10.3f}" for a in col_lut])
+                else: # unknown region
+                    col_lut=np.array([0,0,0,0])
+                    keyvaluepairs[name + '_Name'] = 'Unknown'
+                    keyvaluepairs[name + '_Color'] = ' '.join([f"{a:10.3f}" for a in col_lut])
+                keyvaluepairs[name + '_ColorAutoGenerated'] = '1'
+                keyvaluepairs[name + '_Extent'] = f'0 {shape[0]-1} 0 {shape[1]-1} 0 {shape[2]-1}'
+                keyvaluepairs[name + '_ID'] = 'Segment_{}'.format(id)
+                keyvaluepairs[name + '_LabelValue'] = '{}'.format(id)
+                keyvaluepairs[name + '_Layer'] = '0'
+                keyvaluepairs[name + '_NameAutoGenerated'] = 1
+                keyvaluepairs[name + '_Tags'] = 'TerminologyEntry:Segmentation category' +\
+                    ' and type - 3D Slicer General Anatomy list~SRT^T-D0050^Tissue~SRT^' +\
+                    'T-D0050^Tissue~^^~Anatomic codes - DICOM master list~^^~^^|'
+                i += 1
         keyvaluepairs['Segmentation_ContainedRepresentationNames'] = 'Binary labelmap|'
         keyvaluepairs['Segmentation_ConversionParameters'] = 'placeholder'
         keyvaluepairs['Segmentation_MasterRepresentation'] = 'Binary labelmap'
         
         nrrd.write(out_file, seg_cut, keyvaluepairs)
-
-    def write_ply(self, filename, vertices, faces, comment=None):
-        # infer number of vertices and faces
-        number_vertices = vertices.shape[0]
-        number_faces = faces.shape[0]
-        # make header dataframe
-        header = ['ply',
-                'format ascii 1.0',
-                'comment %s' % comment,
-                'element vertex %i' % number_vertices,
-                'property float x',
-                'property float y',
-                'property float z',
-                'element face %i' % number_faces,
-                'property list uchar int vertex_indices',
-                'end_header'
-                ]
-        header_df = pd.DataFrame(header)
-        # make dataframe from vertices
-        vertex_df = pd.DataFrame(vertices)
-        # make dataframe from faces, adding first row of 3s (indicating triangles)
-        triangles = np.reshape(3 * (np.ones(number_faces)), (number_faces, 1))
-        triangles = triangles.astype(int)
-        faces = faces.astype(int)
-        faces_df = pd.DataFrame(np.concatenate((triangles, faces), axis=1))
-        # write dfs to csv
-        header_df.to_csv(filename, header=None, index=False)
-        with open(filename, 'a') as f:
-            vertex_df.to_csv(f, header=False, index=False,
-                            float_format='%.3f', sep=' ')
-        with open(filename, 'a') as f:
-            faces_df.to_csv(f, header=False, index=False,
-                            float_format='%.0f', sep=' ')
     
     # Function to create vtkPolyData object
     def makePolyData(self, verts, faces, labelsScalars, arrayScalars):

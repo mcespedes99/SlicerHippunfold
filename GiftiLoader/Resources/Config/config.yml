@@ -43,8 +43,16 @@ pybids_inputs:
       extension: '.nii.gz'
       suffix: 'dseg'
       datatype: 'anat'
+    colortable: '/home/mcespedes/Documents/code/SlicerHippunfold/HippSlicer/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'
+    show_unknown: False
   #fmriprep
   surf2:
     pybids_filters:
       extension: '.surf.gii'
       datatype: 'anat'
+  # dseg2:
+  #   pybids_filters:
+  #     extension: '.nii.gz'
+  #     suffix: 'dseg'
+  #   colortable: '/home/mcespedes/Desktop/freesurfer_labels.tsv'
+  #   show_unknown: False
