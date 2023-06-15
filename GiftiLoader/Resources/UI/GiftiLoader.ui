@@ -25,8 +25,8 @@
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="ctkDirectoryButton" name="HippUnfoldDirSelector">
-        <property name="HippUnfoldDir" stdset="0">
+       <widget class="ctkDirectoryButton" name="InputDirSelector">
+        <property name="InputDir" stdset="0">
          <string>Input path to Hippunfold results</string>
         </property>
         <property name="showChildNodeTypes" stdset="0">

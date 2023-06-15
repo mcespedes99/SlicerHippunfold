@@ -1,6 +1,4 @@
 # config.yml file
-hippunfold: True
-
 pybids_inputs:
   # Hippunfold hippocampus surfaces
   hipp_surf:
@@ -15,25 +13,7 @@ pybids_inputs:
         pybids_filters:
           extension: '.label.gii'
         match_entities: ['label', 'hemi']
-        colortable: '/home/mcespedes/Documents/code/SlicerHippunfold/HippSlicer/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'
-      shapes:
-        pybids_filters:
-          extension: '.shape.gii'
-        match_entities: ['label', 'hemi']
-  # Hippunfold dentate surfaces
-  dentate_surf:
-    # Filters to look for surf files
-    pybids_filters:
-      extension: '.surf.gii'
-      space: 'T1w'
-      suffix: ['inner','midthickness','outer']
-    # Scalars to attach to the surf
-    scalars:
-      labels:
-        pybids_filters:
-          extension: '.label.gii'
-        match_entities: ['label', 'hemi']
-        colortable: '/home/mcespedes/Documents/code/SlicerHippunfold/HippSlicer/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'
+        colortable: '/home/mcespedes/Documents/code/SlicerHippunfold/GiftiLoader/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'
       shapes:
         pybids_filters:
           extension: '.shape.gii'
@@ -43,7 +23,7 @@ pybids_inputs:
       extension: '.nii.gz'
       suffix: 'dseg'
       datatype: 'anat'
-    colortable: '/home/mcespedes/Documents/code/SlicerHippunfold/HippSlicer/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'
+    colortable: '/home/mcespedes/Documents/code/SlicerHippunfold/GiftiLoader/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'
     show_unknown: False
   #fmriprep
   surf2:

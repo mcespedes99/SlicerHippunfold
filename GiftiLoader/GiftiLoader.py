@@ -40,7 +40,7 @@ except:
     import yaml
 
 #
-# GiftiLoader. Module to connect 3D Slicer with vCastSender application.
+# GiftiLoader. Module to load gifti files into 3D Slicer.
 #
 
 class GiftiLoader(ScriptedLoadableModule):
@@ -81,13 +81,11 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.logic = None
         self._parameterNode = None
         self._updatingGUIFromParameterNode = False  
+        # Parameters used to save states or useful information
         self._bool_subj = False
         self._dir_selected = False
-        self.atlas_labels = self.resourcePath('Data/desc-subfields_atlas-bigbrain_dseg.tsv')
         self.config = self.resourcePath('Config/config.yml')
-        # Condition to set apply botton to true based on files selection
-        self.files_selected = False
-        self.checkboxes = [[],[]] # convert and visible
+        self.checkboxes = [[],[]]
 
     def setup(self):
         """
@@ -105,23 +103,24 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
         Load widget from .ui file (created by Qt Designer).
         """
-        # Additional widgets can be instantiated manually and added to self.layout.
+        # Load from .ui file
         uiWidget = slicer.util.loadUI(self.resourcePath('UI/GiftiLoader.ui'))
         self.layout.addWidget(uiWidget)
         self.ui = slicer.util.childWidgetVariables(uiWidget)
         # UI boot configuration of 'Apply' button and the input box. 
         self.ui.applyButton.toolTip = "Please select a path to Hippunfold results"
         self.ui.applyButton.enabled = False
-        # TableWidget
+        # TableWidget to display files
         header = self.ui.tableFiles.horizontalHeader()
         header.setDefaultSectionSize(80)
         header.setSectionResizeMode(0, qt.QHeaderView.Stretch)
         header.setSectionResizeMode(1, qt.QHeaderView.Fixed)
         header.setSectionResizeMode(2, qt.QHeaderView.Fixed)
 
-        # Subj dropdown
+        # Dropdown to select subject
         self.ui.subj.addItems(['Select subject'])
-
+        
+        # Set default state of config path
         self.ui.configFileSelector.setCurrentPath(self.config)
         
 
@@ -139,7 +138,7 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
         # (in the selected parameter node).
-        self.ui.HippUnfoldDirSelector.connect("directoryChanged(QString)", self.onDirectoryChange)
+        self.ui.InputDirSelector.connect("directoryChanged(QString)", self.onDirectoryChange)
         self.ui.subj.connect('currentIndexChanged(int)', self.onSubjChange)
         self.ui.configFileSelector.connect("currentPathChanged(QString)", self.onConfigChange)
         self.ui.VisibleAll.connect('checkedIndexesChanged()', self.onVisibleAllChange)
@@ -213,15 +212,18 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def onSubjChange(self):
         """
-        This method is called whenever subject object is changed.
+        This method is called whenever subject dropdown object is changed.
         The module GUI is updated to show the current state of the parameter node.
         """
         if self._parameterNode is None or self._updatingGUIFromParameterNode:
             return
+        # Clean the list of files
         self.checkboxes = [[],[]]
-        # Set state of button
+        # Set state of button only if a subj is selected
         if self.ui.subj.currentIndex > 0:
+            # Save the state (subject is selected)
             self._bool_subj = True
+            # Load the information if
             if self._dir_selected:
                 # Clear the table
                 while (self.ui.tableFiles.rowCount > 0):
@@ -231,8 +233,9 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     rowPosition = self.ui.tableFiles.rowCount
                     self.ui.tableFiles.insertRow(rowPosition)
                     # Use file path without selected parent folder
-                    filename = re.sub(str(self.ui.HippUnfoldDirSelector.directory), '.', file)
+                    filename = re.sub(str(self.ui.InputDirSelector.directory), '.', file)
                     self.ui.tableFiles.setItem(rowPosition, 0, qt.QTableWidgetItem(filename))
+                    # Add the two checkboxes
                     for i in range(1,3):
                         # Construct checkbox and add to table
                         cell_widget = qt.QWidget()
@@ -274,14 +277,14 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def onConfigChange(self):
         """
-        Function to enable/disable 'Apply' button depending on the selected file
+        Function to update the list of inputs depending on the configuration file.
         """
         if (os.path.isfile(str(self.ui.configFileSelector.currentPath)) and self._dir_selected):
             self.config = str(self.ui.configFileSelector.currentPath)
             # Read yaml file
             with open(self.config) as file:
                 inputs_dict = yaml.load(file, Loader=yaml.FullLoader)
-            data_path = str(self.ui.HippUnfoldDirSelector.directory)
+            data_path = str(self.ui.InputDirSelector.directory)
             layout = BIDSLayout(data_path, config = self.resourcePath('Data/bids.json'), validate=False)
             self.files = {}
             for subj in self.list_subj:
@@ -290,14 +293,14 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     input_filters = {
                         'subject':subj
                     }
+                    # Get pybids input filter based on the config file
                     dict_input = inputs_dict['pybids_inputs'][type_file]
-                    # Update filter
+                    # Update filter to add subject
                     input_filters.update(dict_input['pybids_filters'])
                     # Look for files based on BIDS 
                     image_files = layout.get(**input_filters)
                     tmp_files = layout.get(**input_filters, return_type='filename')
                     # Check if there are scalars attached
-                    # print(tmp_files)
                     # Case 1: gifti with scalars 
                     if 'scalars' in dict_input:
                         tmp_files_color = []
@@ -332,7 +335,7 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     self.files[subj] += tmp_files_color
     def onVisibleAllChange(self):
         """
-        Function to select all or select none
+        Function to select all or select none files to show in the 3D view.
         """
         model = self.ui.VisibleAll.model()
         index_int = self.ui.VisibleAll.currentIndex
@@ -352,7 +355,7 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def onConvertAllChange(self):
         """
-        Function to select all or select none
+        Function to select all or select none files to convert.
         """
         model = self.ui.ConvertAll.model()
         index_int = self.ui.ConvertAll.currentIndex
@@ -372,9 +375,9 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def onDirectoryChange(self):
         """
-        Function to enable/disable 'Apply' button depending on the selected file
+        Function to update the list of files based on the input directory chosen. Also defines the state of 'Apply' button.
         """
-        _tmp_dir_input = str(self.ui.HippUnfoldDirSelector.directory) 
+        _tmp_dir_input = str(self.ui.InputDirSelector.directory) 
 
         # Bool to change button status
         # If the selected file is a valid one, the button is enabled.   
@@ -404,20 +407,19 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self._dir_selected = False
 
     def chkBoxVisibleChange(self):
+        """
+        Function to manage checked items in the 'Visible' column.
+        Updates the checkbox for each item as well as updating the 'All/None' checkbox.
+        """
         # Look for amount of items checked
-        if len(self.checkboxes[0]) == len(self.checkboxes[1]):
-            item_checked = 0
-            for chk_bx_conv, chk_box_vis in zip(self.checkboxes[0], self.checkboxes[1]):
-                if chk_box_vis.checkState() == qt.Qt.Checked and chk_bx_conv.checkState() == qt.Qt.Unchecked:
-                    chk_box_vis.setCheckState(qt.Qt.Unchecked)
-                elif chk_box_vis.checkState() == qt.Qt.Checked:
-                    item_checked += 1
-        else:
-            item_checked = 0
-            for chk_bx in self.checkboxes[1]:
-                if chk_bx.checkState() == qt.Qt.Checked:
-                    item_checked += 1
-        # Update all/none state
+        item_checked = 0
+        for chk_bx_conv, chk_box_vis in zip(self.checkboxes[0], self.checkboxes[1]):
+            # Visible cannot be checked if convert is unchecked.
+            if chk_box_vis.checkState() == qt.Qt.Checked and chk_bx_conv.checkState() == qt.Qt.Unchecked:
+                chk_box_vis.setCheckState(qt.Qt.Unchecked)
+            elif chk_box_vis.checkState() == qt.Qt.Checked:
+                item_checked += 1
+        # Update all/none state based on the amount of files checked.
         model = self.ui.VisibleAll.model()
         if item_checked == len(self.checkboxes[1]):
             state = 'Check'
@@ -434,12 +436,16 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 model.itemFromIndex(indexqt).setCheckState(qt.Qt.Unchecked)
     
     def chkBoxConvertChange(self):
+        """
+        Function to manage checked items in the 'Convert' column.
+        Updates the checkbox for each item as well as updating the 'All/None' checkbox.
+        """
         # Look for amount of items checked
         item_checked = 0
         for chk_bx in self.checkboxes[0]:
             if chk_bx.checkState() == qt.Qt.Checked:
                 item_checked += 1
-        # Update all/none state
+        # Update all/none state based on the amount of files checked.
         model = self.ui.ConvertAll.model()
         if item_checked == len(self.checkboxes[0]):
             state = 'Check'
@@ -468,7 +474,7 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
 
-        self._parameterNode.SetNodeReferenceID("HippUnfoldDir", self.ui.HippUnfoldDirSelector.currentNodeID)
+        self._parameterNode.SetNodeReferenceID("InputDir", self.ui.InputDirSelector.currentNodeID)
         self._parameterNode.SetNodeReferenceID("OutputDir", self.ui.OutputDirSelector.currentNodeID)
 
         self._parameterNode.EndModify(wasModified)
@@ -482,15 +488,13 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         for index, chk_bx in enumerate(self.checkboxes[0]):
             if chk_bx.checkState() == qt.Qt.Checked:
                 files_convert.append(self.files[self.ui.subj.currentText][index])
-        # print(files_convert)
         # Retrieve files to be visible 
         files_visible = []
         for index, chk_bx in enumerate(self.checkboxes[1]):
             if chk_bx.checkState() == qt.Qt.Checked:
                 files_visible.append(self.files[self.ui.subj.currentText][index][0])
-        # print(files_convert)
         GiftiLoaderLogic().convertToSlicer(str(self.ui.OutputDirSelector.directory), 
-                                           self.atlas_labels, files_convert, files_visible)
+                                           files_convert, files_visible)
 
 #########################################################################################
 ####                                                                                 ####
@@ -513,17 +517,11 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
         if not parameterNode.GetParameter("LUT"):
             parameterNode.SetParameter("LUT", "Select LUT file")
 
-    def convertToSlicer(self, OutputPath, atlas_labels_file, files_convert, files_visible):
+    def convertToSlicer(self, OutputPath, files_convert, files_visible):
         """
-        Updates this file by changing the default _dir_chosen attribute from
-        the GiftiLoader and GiftiLoaderWidget classes so that the next time
-        3D Slicer is launched, the directory to vCastSender.exe is saved.
+        Takes the files, convert them into an Slicer compatible format, saves them and loads them into 3D Slicer.
         """
-        # Read atlas label
-        atlas_labels = pd.read_table(atlas_labels_file)
-        # print(atlas_labels.head())
-        atlas_labels['lut']=atlas_labels[['r','g','b']].to_numpy().tolist()
-        # Create dictionary of file types
+        # Create dictionary to separate files based on their type (gifti vs nifti vs anything else)
         files_dict = {}
         for file, scalars in files_convert:
             filename = Path(file)
@@ -546,6 +544,9 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
                 print(f'File type {extension} is not supported.')   
 
     def convert_dseg(self, dseg_files, OutputPath, files_visible):
+        """
+        Converts nifti files to seg.nrrd and loads them into 3D Slicer.
+        """
         for dseg, (colortable, show_unknown) in dseg_files:
             # Read colortable
             atlas_labels = pd.read_table(colortable)
@@ -560,16 +561,20 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
             if not os.path.exists(os.path.join(OutputPath, parent_dir)):
                 os.makedirs(os.path.join(OutputPath, parent_dir))
             seg_out_fname = os.path.join(OutputPath, parent_dir, f'{base_filename}.seg.nrrd')
-            # print(seg_out_fname)
             # Load data from dseg file
             data_obj=nb.load(dseg)
+            # Convert to nrrd
             self.write_nrrd(data_obj, seg_out_fname, atlas_labels, show_unknown)
             seg = slicer.util.loadSegmentation(seg_out_fname)
             if dseg in files_visible:
                 seg.CreateClosedSurfaceRepresentation()
     
     def convert_surf(self, surf_files, OutputPath, files_visible):
+        """
+        Converts gifti files to vtk and loads them into 3D Slicer.
+        """
         for surf, label_files in surf_files:
+            # Build the name of the output file
             # Find base file name to create output
             filename_with_extension = os.path.basename(surf)
             base_filename = filename_with_extension.split('.', 1)[0]
@@ -579,29 +584,28 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
             # Create surf folder if it doesn't exist
             if not os.path.exists(os.path.join(OutputPath, parent_dir)):
                 os.makedirs(os.path.join(OutputPath, parent_dir))
+            # Output file name
             outFilePath = os.path.join(OutputPath, parent_dir, f'{base_filename}.vtk')
             # Extract geometric data
             gii_data = nb.load(surf)
             vertices = gii_data.get_arrays_from_intent('NIFTI_INTENT_POINTSET')[0].data
             faces = gii_data.get_arrays_from_intent('NIFTI_INTENT_TRIANGLE')[0].data
-            # Extract color data
-            print('aqui')
-            # Add scalars
+            # Extract color data and add scalars
             arrayScalars = []
             labelsScalars = []
             active_scalar = None
             scalar_range = []
             if len(label_files)>0:
                 label_files_df = pd.DataFrame(label_files)
+                # Iterate over the different files with scalars
                 for index in label_files_df.index:
                     vert_colors_idx = nb.load(label_files_df.loc[index, 0]).agg_data()
                     name_label = os.path.basename(label_files_df.loc[index, 0]).split('.', 1)[0].split('-')[-1]
-                    # print(vert_colors_idx[0:10])
-                    # Extract colors from df if exists
+                    # Case 1: Scalar + colortable
+                    # Extract colors from df if a colortable was given
                     if label_files_df.loc[index, 1] != None:
                         df_colors = pd.read_table(label_files_df.loc[index, 1], index_col='index')
-                        print('a')
-                        # Create color table
+                        # Create color table in Slicer
                         colorTableNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLProceduralColorNode", "HippUnfoldColors")
                         colorTableNode.SetType(slicer.vtkMRMLColorTableNode.User)
                         colorTransferFunction = vtk.vtkDiscretizableColorTransferFunction()
@@ -611,27 +615,30 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
                             b = df_colors.loc[index_color, 'b']/255.0
                             colorTransferFunction.AddRGBPoint(index_color, r, g, b)
                         colorTableNode.SetAndObserveColorTransferFunction(colorTransferFunction)
-                        # Test 
+                        # Append scalars into the list of scalars
                         if len(arrayScalars) == 0:
                             arrayScalars = [tuple([scalar]) for scalar in vert_colors_idx]
                         else:
                             for idx in range(len(vert_colors_idx)):
                                 arrayScalars[idx] += tuple([vert_colors_idx[idx]])
-                        # Name 
+                        # Append the name of the scalar into the list of names
                         labelsScalars.append(name_label)
+                        # Set any scalar with colortable as the active scalar
                         active_scalar = name_label
+                        # Extract the range of the active scalar
                         indexes = df_colors.index.values.tolist()
                         scalar_range = (indexes[0], indexes[-1])
+                    # Case 2: Scalar without colotable.
                     else:
-                        print('b')
-                        # Test 
+                        # Append scalars into the list of scalars 
                         if len(arrayScalars) == 0:
                             arrayScalars = [tuple([scalar]) for scalar in vert_colors_idx]
                         else:
                             for idx in range(len(vert_colors_idx)):
                                 arrayScalars[idx] += tuple([vert_colors_idx[idx]])
-                        # Name 
+                        # Append the name of the scalar into the list of names 
                         labelsScalars.append(name_label)
+                        # Set as active scalar only if there's no defined active scalar and this is the last scalar file
                         if active_scalar == None and index == list(label_files_df.index)[-1]:
                             active_scalar = name_label
             # Create model
@@ -640,6 +647,7 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
             # Set name
             modelNode.SetName(base_filename)
             # Set active scalar
+            # Case 1: scalar + colortable
             if len(scalar_range) > 0 and active_scalar != None:
                 modelNode.GetDisplayNode().SetActiveScalar(active_scalar, vtk.vtkAssignAttribute.POINT_DATA)
                 modelNode.GetDisplayNode().SetAndObserveColorNodeID(colorTableNode.GetID())
@@ -668,6 +676,9 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
 
     # Functions to compute files
     def bounding_box(self, seg):
+        """
+        Defines bounding box around volumetric object
+        """
         x = np.any(np.any(seg, axis=0), axis=1)
         y = np.any(np.any(seg, axis=1), axis=1)
         z = np.any(np.any(seg, axis=1), axis=0)
@@ -678,6 +689,9 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
         return bbox
 
     def get_shape_origin(self, img_data):
+        """
+        Get shape of the volumetric data and defines the origin in one of its corners.
+        """
         bbox = self.bounding_box(img_data)
         ymin, ymax, xmin, xmax, zmin, zmax = bbox
         shape = list(np.array([ymax-ymin, xmax-xmin, zmax-zmin]) + 1)
@@ -685,11 +699,13 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
         return shape, origin
 
     def write_nrrd(self, data_obj, out_file, atlas_labels, show_unknown):
-        
+        """
+        Writes nrrd file based on a nifti object.
+        """
+        # Get data from the nifti
         data=data_obj.get_fdata()
-        print(np.unique(data))
-        print(atlas_labels)
         
+        # Define some parameters for the nrrd
         keyvaluepairs = {}
         keyvaluepairs['dimension'] = 3
         keyvaluepairs['encoding'] = 'gzip'
@@ -698,6 +714,7 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
         keyvaluepairs['space directions'] = data_obj.affine[:3,:3].T
         keyvaluepairs['type'] = 'double'
         
+        # Get bounding box, shape and origin of the object.
         box = self.bounding_box(data)
         seg_cut = data[box[0]:box[1]+1,box[2]:box[3]+1,box[4]:box[5]+1]
         shape, origin = self.get_shape_origin(data)
@@ -706,11 +723,11 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
         keyvaluepairs['sizes'] = np.array([*shape])
         keyvaluepairs['space origin'] = origin[0]
         i = 0 # Count segments
+        # Set parameters for each different label in the nifti object
         for id in range(int(np.min(data)),int(np.max(data))+1):
-            print(show_unknown)
-            print(type(show_unknown))
             if id in atlas_labels['index'].tolist() or show_unknown:
                 name = 'Segment{}'.format(i)
+                # Define colors and name in an atlas was given
                 if id in atlas_labels['index'].tolist():
                     col_lut=np.array(atlas_labels[atlas_labels['index']==id]['lut'].values[0]+[255])/255
                     keyvaluepairs[name + '_Name'] = atlas_labels[atlas_labels['index']==id]['abbreviation'].values[0]
@@ -737,8 +754,12 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
     
     # Function to create vtkPolyData object
     def makePolyData(self, verts, faces, labelsScalars, arrayScalars):
-        # https://github.com/stephan1312/SlicerEAMapReader/blob/2798100fe2aebf482a83b347c1cef18135f2df87/EAMapReader-Slicer-4.11/lib/Slicer-4.11/qt-scripted-modules/EAMapReader.py#L218-L290
-        # https://programtalk.com/python-examples/vtk.vtkPolyData/
+        """
+        Create vtkPolyData based on vertices, faces and scalars. Recovered from:
+        https://github.com/stephan1312/SlicerEAMapReader/blob/2798100fe2aebf482a83b347c1cef18135f2df87/EAMapReader-Slicer-4.11/lib/Slicer-4.11/qt-scripted-modules/EAMapReader.py#L218-L290
+        https://programtalk.com/python-examples/vtk.vtkPolyData/
+        """
+        # Build structure
         mesh = vtk.vtkPolyData()
         pts = vtk.vtkPoints()
         for pt in verts:
@@ -783,18 +804,171 @@ class GiftiLoaderTest(ScriptedLoadableModuleTest):
     """Run as few or as many tests as needed here.
     """
     self.setUp()
-    self.test_GiftiLoader1()
+    # Test load only dseg file
+    self.test_GiftiLoader_dseg()
+    self.setUp()
+    # Test load only surf files (with and without scalar)
+    self.test_GiftiLoader_surf()
+    self.setUp()
+    # Test load multiple files (dseg + surf + invalid)
+    self.test_GiftiLoader_multiple()
 
-  def test_GiftiLoader1(self):
-    """ Ideally you should have several levels of tests.  At the lowest level
-    tests should exercise the functionality of the logic with different inputs
-    (both valid and invalid).  At higher levels your tests should emulate the
-    way the user would interact with your code and confirm that it still works
-    the way you intended.
-    One of the most important features of the tests is that it should alert other
-    developers when their changes will have an impact on the behavior of your
-    module.  For example, if a developer removes a feature that you depend on,
-    your test should break so they know that the feature is needed.
+  def test_GiftiLoader_dseg(self):
+    """ 
+    Tests loading and converting two dseg files with colortable
     """
+    import tempfile 
+    from os.path import dirname, abspath
+    # Output dir
+    out_dir = tempfile.gettempdir()
+    # dseg, (colortable, show_unknown)
+    # Build files_convert
+    current_dir = dirname(abspath(__file__))
+    input_filters = {
+                    'subject':'P022',
+                    'extension': '.nii.gz',
+                    'suffix': 'dseg',
+                    'datatype': 'anat'
+                    }
+    current_dir = dirname(abspath(__file__))
+    layout = BIDSLayout( os.path.join(current_dir,'Resources/Data/Test'), config = os.path.join(current_dir,'Resources/Data/bids.json'), validate=False)
+    # Look for files based on BIDS 
+    tmp_files = layout.get(**input_filters, return_type='filename')
+    unknown = True
+    files_convert = []
+    for tmp_file in tmp_files:
+        files_convert.append((tmp_file, ('/home/mcespedes/Documents/code/SlicerHippunfold/GiftiLoader/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv',
+                unknown)))
+        unknown = False
+    # Ony set to visible the second file
+    files_visible = [tmp_files[-1]]
+    GiftiLoaderLogic().convertToSlicer(str(out_dir), 
+                                           files_convert, files_visible)
 
-    self.delayDisplay("No tests are implemented")
+    self.delayDisplay("dseg test passed!")
+
+  def test_GiftiLoader_surf(self):
+    """ 
+    Tests loading two surfaces files (gifti). One file with scalars and the other without them.
+    """
+    import tempfile 
+    from os.path import dirname, abspath
+    # Output dir
+    out_dir = tempfile.gettempdir()
+    # (tmp_file, labels_color)
+    # labels_color = [(file, dict_input['scalars'][scalar]['colortable']) for file in color_filenames]
+    current_dir = dirname(abspath(__file__))
+    # Input dictionary
+    input_filters = {
+                    'subject':'P022',
+                    'extension': '.surf.gii',
+                    'space': 'T1w',
+                    'suffix': ['inner','midthickness','outer']
+                    }
+    current_dir = dirname(abspath(__file__))
+    layout = BIDSLayout( os.path.join(current_dir,'Resources/Data/Test'), config = os.path.join(current_dir,'Resources/Data/bids.json'), validate=False)
+    # Look for files based on BIDS 
+    image_files = layout.get(**input_filters)
+    tmp_files = layout.get(**input_filters, return_type='filename')
+    # Config of scalar files
+    extensions = [('.label.gii', '/home/mcespedes/Documents/code/SlicerHippunfold/GiftiLoader/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'), 
+                  ('.shape.gii', None)]
+    match_entities = ['label', 'hemi']
+    files_convert = []
+    # Load one of the surf files with scalars
+    labels_color = []
+    for scalar_type, colortable in extensions:
+        input_filters = {
+                        'subject':'P022'
+                        }
+        input_filters['extension'] = scalar_type
+        for entity in match_entities:
+            input_filters[entity] = image_files[0].get_entities()[entity]
+        scalar_filenames = layout.get(**input_filters, return_type='filename')
+        labels_color +=  [(file, colortable) for file in scalar_filenames]
+    files_convert.append((tmp_files[0], labels_color))
+    # Load the other file without the scalars
+    files_convert.append((tmp_files[1], []))
+    # Ony set to visible the first file
+    files_visible = [tmp_files[0]]
+    GiftiLoaderLogic().convertToSlicer(str(out_dir), 
+                                           files_convert, files_visible)
+
+    self.delayDisplay("surf test passed!")
+
+  def test_GiftiLoader_multiple(self):
+    """ 
+    Tests loading surfaces + volumetric + invalid files.
+    """
+    import tempfile 
+    from os.path import dirname, abspath
+    # Output dir
+    out_dir = tempfile.gettempdir()
+    # First compute dseg files
+    # Build files_convert
+    current_dir = dirname(abspath(__file__))
+    input_filters = {
+                    'subject':'P022',
+                    'extension': '.nii.gz',
+                    'suffix': 'dseg',
+                    'datatype': 'anat'
+                    }
+    current_dir = dirname(abspath(__file__))
+    layout = BIDSLayout( os.path.join(current_dir,'Resources/Data/Test'), config = os.path.join(current_dir,'Resources/Data/bids.json'), validate=False)
+    # Look for files based on BIDS 
+    tmp_files = layout.get(**input_filters, return_type='filename')
+    unknown = True
+    files_convert = []
+    for tmp_file in tmp_files:
+        files_convert.append((tmp_file, ('/home/mcespedes/Documents/code/SlicerHippunfold/GiftiLoader/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv',
+                unknown)))
+        unknown = False
+    # Ony set to visible the second file
+    files_visible = [tmp_files[-1]]
+
+    # Now get surf files
+    # Input dictionary
+    input_filters = {
+                    'subject':'P022',
+                    'extension': '.surf.gii',
+                    'space': 'T1w',
+                    'suffix': ['inner','midthickness','outer']
+                    }
+    current_dir = dirname(abspath(__file__))
+    # Look for files based on BIDS 
+    image_files = layout.get(**input_filters)
+    tmp_files = layout.get(**input_filters, return_type='filename')
+    # Config of scalar files
+    extensions = [('.label.gii', '/home/mcespedes/Documents/code/SlicerHippunfold/GiftiLoader/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'), 
+                  ('.shape.gii', None)]
+    match_entities = ['label', 'hemi']
+    for tmp_file, image_file in zip(tmp_files, image_files):
+        labels_color = []
+        for scalar_type, colortable in extensions:
+            input_filters = {
+                            'subject':'P022'
+                            }
+            input_filters['extension'] = scalar_type
+            for entity in match_entities:
+                input_filters[entity] = image_file.get_entities()[entity]
+            scalar_filenames = layout.get(**input_filters, return_type='filename')
+            labels_color +=  [(file, colortable) for file in scalar_filenames]
+        files_convert.append((tmp_file, labels_color))
+    # Ony set to visible the second file
+    files_visible.append(tmp_files[0])
+
+    # Import invalid file
+    input_filters = {
+                    'subject':'P022',
+                    'extension': '.label.gii',
+                    }
+    # Look for files based on BIDS 
+    tmp_files = layout.get(**input_filters, return_type='filename')
+    unknown = True
+    files_convert += [(tmp_file, []) for tmp_file in tmp_files]
+    # Ony set to visible the second file
+    files_visible.append(tmp_files[-1])
+    GiftiLoaderLogic().convertToSlicer(str(out_dir), 
+                                           files_convert, files_visible)
+
+    self.delayDisplay("dseg+surf test passed!")
