@@ -1,4 +1,4 @@
-# SlicerHippunfold
+# Import Gifti files to 3D Slicer
 
 This extension loads gifti files to 3D Slicer and save them as vtk files in a specified BIDS folder. Multiple scalars can be attached to each mesh along with a color table as tsv file (which is optional). All of the information, except for the color table, for each mesh is saved into a new vtk file, which can be reloaded to 3D Slicer.
 
@@ -18,7 +18,7 @@ Use the following instruction as a guide on how to use this extension:
 1. Click on the 3D Slicer 'Module Selection & Navigation' dropdown. Go to 'Surface Models'->'Gifti Loader'.
 2. Select a valid BIDS directory as input and a valid output directory.
 
-<p align="center"><img src="resources/imgs/dir_selection.png" alt="icon_bar" width="60%"/></p>
+<p align="center"><img src="resources/imgs/dir_selection.png" alt="icon_bar" width="80%"/></p>
 
 3. The configuration files will be automatically set to the default. This file only includes one dictionary called ``` pybids_inputs ```, which can have multiple entries that define the type of files that the extension will be looking for. There are two types of entries:
 
@@ -63,13 +63,11 @@ Use the following instruction as a guide on how to use this extension:
   
    You can comment/uncomment any section to activate/desactivate each filter repectively. You can also create a copy of this file and modify it as you like. Then only change the path in the UI (Config) to point to your file.
 
-4. After setting the config file and input and output directories, you should be able to see a dropdown of the subjects present on the input BIDS directory under the 'Subject' dropdown. Choose one of these subjects.
-
-<p align="center"><img src="resources/imgs/dir_selection.png" alt="icon_bar" width="60%"/></p>
+4. After setting the config file and input and output directories, you should be able to see a dropdown of the subjects present on the input BIDS directory under the 'Subject' dropdown. Choose one of the subjects.
 
 5. After choosing, the files related to that subject will appear under 'Files' and the 'Apply' button will be enabled. Use the 'Convert' checkbox to choose which files to process and the 'Visible' checkbox to decide which files to show on the 3D View. The dropdown above each column can be used to select all the files at ones or to uncheck them all.
 
-<p align="center"><img src="resources/imgs/files_selected.png" alt="icon_bar" width="60%"/></p>
+<p align="center"><img src="resources/imgs/files_selected.png" alt="icon_bar" width="80%"/></p>
 
 6. Hit the 'Apply' button to process the selected files. Give it a few minutes to see the results.
 
