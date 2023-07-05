@@ -1,10 +1,10 @@
 # Import Gifti files to 3D Slicer
 
-This extension loads gifti files to 3D Slicer and save them as vtk files in a specified BIDS folder. Multiple scalars can be attached to each mesh along with a color table as tsv file (which is optional). All of the information, except for the color table, for each mesh is saved into a new vtk file, which can be reloaded to 3D Slicer.
+This extension contains only one module (GiftiLoader) loads gifti files to 3D Slicer and save them as vtk files in a specified BIDS folder. Multiple scalars can be attached to each mesh along with a color table as tsv file (which is optional). All of the information, except for the color table, for each mesh is saved into a new vtk file, which can be reloaded to 3D Slicer.
 
 This tool was originally developed to import HippUnfold surfaces and volumes to 3D Slicer; however, it is able to load any other file with similar format. [PyBids](https://bids-standard.github.io/pybids/index.html) and [NiBabel](https://nipy.org/nibabel/index.html) were used to deal with the BIDS structure and nifti images respectively.
 
-<p align="center"><img src="resources/imgs/example.png" alt="icon_bar" width="40%"/></p>
+<p align="center"><img src="resources/imgs/SlicerGiftiLoaderScreenshot.png" alt="icon_bar" width="40%"/></p>
 
 Some of the main features of this tool are:
 * Works following the Brain Imaging Data Structure (BIDS) standard. By using PyBids, any BIDS directory can be parsed. The extension will detect the subjects in the input directory, along with their corresponding files according to customizable filters from a configuration file.
