@@ -1,5 +1,5 @@
 #-----------------------------------------------------------------------------
-set(MODULE_NAME HippSlicer)
+set(MODULE_NAME GiftiLoader)
 
 #-----------------------------------------------------------------------------
 set(MODULE_PYTHON_SCRIPTS
@@ -10,6 +10,8 @@ set(MODULE_PYTHON_RESOURCES
   Resources/Icons/${MODULE_NAME}.png
   Resources/UI/${MODULE_NAME}.ui
   Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv
+  Resources/Config/config.yml
+  Resources/Data/bids.json
   )
 
 #-----------------------------------------------------------------------------
