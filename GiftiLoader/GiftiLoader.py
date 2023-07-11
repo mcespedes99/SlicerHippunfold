@@ -6,38 +6,6 @@ from slicer.util import VTKObservationMixin
 import numpy as np
 import re
 from pathlib import Path
-# Packages that might need to be installed
-try:
-    from bids import BIDSLayout
-except:
-    os.system('PythonSlicer -m pip install pybids')
-    from bids import BIDSLayout
-        
-try:
-    import nibabel as nb
-    from nibabel.affines import apply_affine
-except:
-    os.system('PythonSlicer -m pip install nibabel')
-    import nibabel as nb
-    from nibabel.affines import apply_affine
-
-try:
-    import nrrd
-except:
-    os.system('PythonSlicer -m pip install pynrrd')
-    import nrrd
-
-try:
-    import pandas as pd
-except:
-    os.system('PythonSlicer -m pip install pandas')
-    import pandas as pd
-
-try:
-    import yaml
-except:
-    os.system('PythonSlicer -m pip install pyyaml')
-    import yaml
 
 #
 # GiftiLoader. Module to load gifti files into 3D Slicer.
@@ -279,6 +247,16 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
         Function to update the list of inputs depending on the configuration file.
         """
+        # Load required packages, if not found, they are installed
+        try:
+            from bids import BIDSLayout
+            import yaml
+        except:
+            # Create progress bar to report installation
+            progressbar=slicer.util.createProgressDialog(parent=slicer.util.mainWindow(),windowTitle='Downloading packages...', value=0, maximum=100)
+            GiftiLoaderLogic().setupPythonRequirements_basic(progressbar)
+            from bids import BIDSLayout
+            import yaml
         if (os.path.isfile(str(self.ui.configFileSelector.currentPath)) and self._dir_selected):
             self.config = str(self.ui.configFileSelector.currentPath)
             # Read yaml file
@@ -377,6 +355,14 @@ class GiftiLoaderWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
         Function to update the list of files based on the input directory chosen. Also defines the state of 'Apply' button.
         """
+        # Load required packages, if not found, they are installed
+        try:
+            from bids import BIDSLayout
+        except:
+            # Create progress bar to report installation
+            progressbar=slicer.util.createProgressDialog(parent=slicer.util.mainWindow(),windowTitle='Downloading...', value=0, maximum=100)
+            GiftiLoaderLogic().setupPythonRequirements_basic(progressbar)
+            from bids import BIDSLayout
         _tmp_dir_input = str(self.ui.InputDirSelector.directory) 
 
         # Bool to change button status
@@ -521,6 +507,21 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
         """
         Takes the files, convert them into an Slicer compatible format, saves them and loads them into 3D Slicer.
         """
+        # Load required packages, if not found, they are installed
+        try:
+            import pandas as pd
+            import nibabel as nb
+            from nibabel.affines import apply_affine
+            import nrrd
+        except:
+            # Create progress bar to report installation
+            progressbar=slicer.util.createProgressDialog(parent=slicer.util.mainWindow(),windowTitle='Downloading...', value=0, maximum=100)
+            self.setupPythonRequirements_logic(progressbar)
+            import pandas as pd
+            import nibabel as nb
+            from nibabel.affines import apply_affine
+            import nrrd
+
         # Create dictionary to separate files based on their type (gifti vs nifti vs anything else)
         files_dict = {}
         for file, scalars in files_convert:
@@ -534,6 +535,11 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
             else:
                 files_dict[ext] = [(file,scalars)]
         
+        # Replace output path: If in the current work directory, Slicer sets OutputPath to './', which causes issues
+        # in the dseg function.
+        if OutputPath=='.':
+            OutputPath = os.getcwd()
+
         # For each type of file, run the corresponding function
         for extension in files_dict:
             if extension == '.surf.gii':
@@ -547,6 +553,8 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
         """
         Converts nifti files to seg.nrrd and loads them into 3D Slicer.
         """
+        import pandas as pd
+        import nibabel as nb
         for dseg, (colortable, show_unknown) in dseg_files:
             # Read colortable
             atlas_labels = pd.read_table(colortable)
@@ -573,6 +581,9 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
         """
         Converts gifti files to vtk and loads them into 3D Slicer.
         """
+        import pandas as pd
+        import nibabel as nb
+        from nibabel.affines import apply_affine
         for surf, label_files in surf_files:
             # Build the name of the output file
             # Find base file name to create output
@@ -702,6 +713,8 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
         """
         Writes nrrd file based on a nifti object.
         """
+        import nibabel as nb
+        import nrrd
         # Get data from the nifti
         data=data_obj.get_fdata()
         
@@ -784,7 +797,35 @@ class GiftiLoaderLogic(ScriptedLoadableModuleLogic):
             mesh.GetPointData().AddArray(scalars[j])
 
         return mesh
-        
+    
+    def setupPythonRequirements_basic(self, progressDialog):
+        """
+        Installs packages required for the computation before the logic (to find files based on BIDS).
+        """
+        # Packages that need to be installed
+        progressDialog.labelText = 'Installing pybids'
+        slicer.util.pip_install('pybids')
+        progressDialog.setValue(50)
+        progressDialog.labelText = 'Installing pyyaml'
+        slicer.util.pip_install('pyyaml')
+        progressDialog.setValue(100)
+        progressDialog.close()
+    
+    def setupPythonRequirements_logic(self, progressDialog):
+        """
+        Installs packages required to process the files.
+        """
+        # Packages that need to be installed
+        progressDialog.labelText = 'Installing nibabel'
+        slicer.util.pip_install('nibabel')
+        progressDialog.setValue(33.33)
+        progressDialog.labelText = 'Installing pynrrd'
+        slicer.util.pip_install('pynrrd')
+        progressDialog.setValue(66.67)
+        progressDialog.labelText = 'Installing pandas'
+        slicer.util.pip_install('pandas')
+        progressDialog.setValue(100)
+        progressDialog.close()
 
 
 
