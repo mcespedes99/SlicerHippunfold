@@ -834,12 +834,21 @@ class GiftiLoaderTest(ScriptedLoadableModuleTest):
   This is the test case for your scripted module.
   Uses ScriptedLoadableModuleTest base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
+  All the files come from running HippUnfold over the Sample Data "MRHead". Refer to the 
+  HippUnfold documentation for more information (https://hippunfold.readthedocs.io/en/latest/index.html).
   """
 
   def setUp(self):
     """ Do whatever is needed to reset the state - typically a scene clear will be enough.
     """
     slicer.mrmlScene.Clear(0)
+    # Install required packages if not installed
+    try:
+        from bids import BIDSLayout
+    except:
+        # Create progress bar to report installation
+        progressbar=slicer.util.createProgressDialog(parent=slicer.util.mainWindow(),windowTitle='Downloading...', value=0, maximum=100)
+        GiftiLoaderLogic().setupPythonRequirements_basic(progressbar)
 
   def runTest(self):
     """Run as few or as many tests as needed here.
@@ -859,14 +868,20 @@ class GiftiLoaderTest(ScriptedLoadableModuleTest):
     Tests loading and converting two dseg files with colortable
     """
     import tempfile 
+    from bids import BIDSLayout
     from os.path import dirname, abspath
+    import SampleData
+
+    # Load MRHead Sample Data
+    sampleDataLogic = SampleData.SampleDataLogic()
+    sampleDataLogic.downloadSample("MRHead")
     # Output dir
     out_dir = tempfile.gettempdir()
     # dseg, (colortable, show_unknown)
     # Build files_convert
     current_dir = dirname(abspath(__file__))
     input_filters = {
-                    'subject':'P022',
+                    'subject':'001',
                     'extension': '.nii.gz',
                     'suffix': 'dseg',
                     'datatype': 'anat'
@@ -878,7 +893,7 @@ class GiftiLoaderTest(ScriptedLoadableModuleTest):
     unknown = True
     files_convert = []
     for tmp_file in tmp_files:
-        files_convert.append((tmp_file, ('/home/mcespedes/Documents/code/SlicerHippunfold/GiftiLoader/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv',
+        files_convert.append((tmp_file, (os.path.join(current_dir, 'Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'),
                 unknown)))
         unknown = False
     # Ony set to visible the second file
@@ -892,8 +907,14 @@ class GiftiLoaderTest(ScriptedLoadableModuleTest):
     """ 
     Tests loading two surfaces files (gifti). One file with scalars and the other without them.
     """
+    from bids import BIDSLayout
     import tempfile 
     from os.path import dirname, abspath
+    import SampleData
+
+    # Load MRHead Sample Data
+    sampleDataLogic = SampleData.SampleDataLogic()
+    sampleDataLogic.downloadSample("MRHead")
     # Output dir
     out_dir = tempfile.gettempdir()
     # (tmp_file, labels_color)
@@ -901,7 +922,7 @@ class GiftiLoaderTest(ScriptedLoadableModuleTest):
     current_dir = dirname(abspath(__file__))
     # Input dictionary
     input_filters = {
-                    'subject':'P022',
+                    'subject':'001',
                     'extension': '.surf.gii',
                     'space': 'T1w',
                     'suffix': ['inner','midthickness','outer']
@@ -912,7 +933,7 @@ class GiftiLoaderTest(ScriptedLoadableModuleTest):
     image_files = layout.get(**input_filters)
     tmp_files = layout.get(**input_filters, return_type='filename')
     # Config of scalar files
-    extensions = [('.label.gii', '/home/mcespedes/Documents/code/SlicerHippunfold/GiftiLoader/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'), 
+    extensions = [('.label.gii', os.path.join(current_dir, 'Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv')), 
                   ('.shape.gii', None)]
     match_entities = ['label', 'hemi']
     files_convert = []
@@ -920,7 +941,7 @@ class GiftiLoaderTest(ScriptedLoadableModuleTest):
     labels_color = []
     for scalar_type, colortable in extensions:
         input_filters = {
-                        'subject':'P022'
+                        'subject':'001'
                         }
         input_filters['extension'] = scalar_type
         for entity in match_entities:
@@ -943,13 +964,19 @@ class GiftiLoaderTest(ScriptedLoadableModuleTest):
     """
     import tempfile 
     from os.path import dirname, abspath
+    from bids import BIDSLayout
+    import SampleData
+
+    # Load MRHead Sample Data
+    sampleDataLogic = SampleData.SampleDataLogic()
+    sampleDataLogic.downloadSample("MRHead")
     # Output dir
     out_dir = tempfile.gettempdir()
     # First compute dseg files
     # Build files_convert
     current_dir = dirname(abspath(__file__))
     input_filters = {
-                    'subject':'P022',
+                    'subject':'001',
                     'extension': '.nii.gz',
                     'suffix': 'dseg',
                     'datatype': 'anat'
@@ -958,19 +985,18 @@ class GiftiLoaderTest(ScriptedLoadableModuleTest):
     layout = BIDSLayout( os.path.join(current_dir,'Resources/Data/Test'), config = os.path.join(current_dir,'Resources/Data/bids.json'), validate=False)
     # Look for files based on BIDS 
     tmp_files = layout.get(**input_filters, return_type='filename')
-    unknown = True
+    unknown = False
     files_convert = []
     for tmp_file in tmp_files:
-        files_convert.append((tmp_file, ('/home/mcespedes/Documents/code/SlicerHippunfold/GiftiLoader/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv',
+        files_convert.append((tmp_file, (os.path.join(current_dir, 'Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'),
                 unknown)))
-        unknown = False
     # Ony set to visible the second file
     files_visible = [tmp_files[-1]]
 
     # Now get surf files
     # Input dictionary
     input_filters = {
-                    'subject':'P022',
+                    'subject':'001',
                     'extension': '.surf.gii',
                     'space': 'T1w',
                     'suffix': ['inner','midthickness','outer']
@@ -980,14 +1006,14 @@ class GiftiLoaderTest(ScriptedLoadableModuleTest):
     image_files = layout.get(**input_filters)
     tmp_files = layout.get(**input_filters, return_type='filename')
     # Config of scalar files
-    extensions = [('.label.gii', '/home/mcespedes/Documents/code/SlicerHippunfold/GiftiLoader/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'), 
+    extensions = [('.label.gii', os.path.join(current_dir, 'Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv')), 
                   ('.shape.gii', None)]
     match_entities = ['label', 'hemi']
     for tmp_file, image_file in zip(tmp_files, image_files):
         labels_color = []
         for scalar_type, colortable in extensions:
             input_filters = {
-                            'subject':'P022'
+                            'subject':'001'
                             }
             input_filters['extension'] = scalar_type
             for entity in match_entities:
@@ -1000,7 +1026,7 @@ class GiftiLoaderTest(ScriptedLoadableModuleTest):
 
     # Import invalid file
     input_filters = {
-                    'subject':'P022',
+                    'subject':'001',
                     'extension': '.label.gii',
                     }
     # Look for files based on BIDS 
