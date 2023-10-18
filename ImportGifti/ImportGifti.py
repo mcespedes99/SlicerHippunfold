@@ -95,6 +95,7 @@ class ImportGiftiWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Set default input and output path to home if not selected
         self.ui.InputDirSelector.filters = ctk.ctkPathLineEdit.Dirs
+        self.ui.OutputDirSelector.filters = ctk.ctkPathLineEdit.Dirs
         home_directory = os.path.expanduser("~")
         if len(self.ui.InputDirSelector.currentPath) == 0:
             try:

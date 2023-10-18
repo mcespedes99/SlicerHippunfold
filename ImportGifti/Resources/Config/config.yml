@@ -1,6 +1,6 @@
 # config.yml file
 # Path or Null
-bids_dir: /home/mcespedes/Documents/Results/hippunfold
+bids_dir: Null
 
 pybids_inputs:
   # Hippunfold hippocampus surfaces
