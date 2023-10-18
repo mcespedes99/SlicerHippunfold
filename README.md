@@ -1,10 +1,10 @@
 # Import Gifti files to 3D Slicer
 
-This extension contains only one module (GiftiLoader) loads gifti files to 3D Slicer and save them as vtk files in a specified BIDS folder. Multiple scalars can be attached to each mesh along with a color table as tsv file (which is optional). All of the information, except for the color table, for each mesh is saved into a new vtk file, which can be reloaded to 3D Slicer.
+This extension contains only one module (ImportGifti) loads gifti files to 3D Slicer and save them as vtk files in a specified BIDS folder. Multiple scalars can be attached to each mesh along with a color table as tsv file (which is optional). All of the information, except for the color table, for each mesh is saved into a new vtk file, which can be reloaded to 3D Slicer.
 
 This tool was originally developed to import HippUnfold surfaces and volumes to 3D Slicer; however, it is able to load any other file with similar format. [PyBids](https://bids-standard.github.io/pybids/index.html) and [NiBabel](https://nipy.org/nibabel/index.html) were used to deal with the BIDS structure and nifti images respectively.
 
-<p align="center"><img src="resources/imgs/SlicerGiftiLoaderScreenshot.png" alt="icon_bar" width="40%"/></p>
+<p align="center"><img src="resources/imgs/SlicerImportGiftiScreenshot.png" alt="icon_bar" width="40%"/></p>
 
 Some of the main features of this tool are:
 * Works following the Brain Imaging Data Structure (BIDS) standard. By using PyBids, any BIDS directory can be parsed. The extension will detect the subjects in the input directory, along with their corresponding files according to customizable filters from a configuration file.
@@ -34,7 +34,7 @@ Use the following instruction as a guide on how to use this extension:
        * scalars: dictionary that contains all of the different scalars that you want to attach to a specific group of surfaces (defined previously by the ``` pybids_filters ```). Each scalar has three entries: 
            * 'pybids_filters': defines the filters to look for the scalar files.
            * 'match_entities': can be used to retrieve only those files that match specific entities with the surfaces files, for example, only those scalars that all have the same 'task' entity as the surfaces files.
-           * 'colortable': indicates the lookup table that is used to defined the colors of the surface using for the current scalars. This colortable has to have at least the following columns: index, r, g, b. Similar to the ones located under ``` GiftiLoader/Resources/Data ```.
+           * 'colortable': indicates the lookup table that is used to defined the colors of the surface using for the current scalars. This colortable has to have at least the following columns: index, r, g, b. Similar to the ones located under ``` ImportGifti/Resources/Data ```.
        
           For example, the following input will look for two different 'types' of scalars ('labels' and 'shapes'). 'labels' is defined by those files in the same BIDS directory as the input with extension '.label.gii' that have the same value as the input files for the entities 'label' and 'hemi'; these type of scalar is associated to a colortable as well. The scalars defined by 'shapes' are not associated to a colortable.
        ``` 
@@ -43,7 +43,7 @@ Use the following instruction as a guide on how to use this extension:
            pybids_filters:
              extension: '.label.gii'
            match_entities: ['label', 'hemi']
-           colortable: '/home/mcespedes/Documents/code/SlicerHippunfold/GiftiLoader/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'
+           colortable: '/home/mcespedes/Documents/code/SlicerHippunfold/ImportGifti/Resources/Data/desc-subfields_atlas-bigbrain_dseg.tsv'
          shapes:
            pybids_filters:
              extension: '.shape.gii'
@@ -51,7 +51,7 @@ Use the following instruction as a guide on how to use this extension:
        ``` 
    * Volumetric segmentations (Nifti files):
       * pybids_filters: dictionary that contains the filters passed to ``` BIDSLayout ``` from PyBids. Similar to the previous case
-      * colortable: Path to lookup table with the labels and colors associated to the labels (values) of each voxel. This colortable has to have at least the following columns: index, name, abbreviation, r, g, b, a. Similar to the ones located under ``` GiftiLoader/Resources/Data ```.
+      * colortable: Path to lookup table with the labels and colors associated to the labels (values) of each voxel. This colortable has to have at least the following columns: index, name, abbreviation, r, g, b, a. Similar to the ones located under ``` ImportGifti/Resources/Data ```.
       * show_unknown: boolean that defines whether unknown regions (not found in the lookup table) should be displayed or not. Defaults to False. 
   
    This config files includes several predefined options under ``` pybids_inputs ```:
